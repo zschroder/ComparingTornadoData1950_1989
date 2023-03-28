@@ -5,3 +5,51 @@ date: '2023-03-28'
 output: html_document
 ---
 
+```{r}
+load("HistoricalTornadoes.RData")
+#HistTorns <- SigTorns
+#HistTornTracks <- SigTornTracks
+#save(HistTorns, HistTornTracks, file = "HistoricalTornadoes.RData")
+load("ModernTornadoes.RData")
+```
+
+Projections you may need: 
+```{r}
+merc <- "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
+US_LCC <- "+proj=lcc +lat_1=33 +lat_2=45 +lat_0=39 +lon_0=-96 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m no_defs"
+```
+
+Coordinate Reference Systems you may need:
+```{r, eval = FALSE}
+WGS84 <- 4326
+```
+
+The modern tornado data comes from: https://www.spc.noaa.gov/wcm/#data
+
+Load the Modern Tornado Record in to the R workspace: 
+```{r, eval = FALSE}
+Torn50_21.spdf <- read.csv(file = "1950-2021_actual_tornadoes.csv")
+```
+
+Modern Tornado Record (as points): 
+```{r, eval = FALSE}
+ModernTorns <- Torn50_21.spdf
+sp::coordinates(ModernTorns) <- ~ slon + slat
+ModernTorns <- st_as_sf(ModernTorns)
+st_crs(ModernTorns) <- WGS84
+```
+
+Modern Tornado Record (as tracks): 
+
+```{r, eval = FALSE}
+ModernTornTracks <- Torn50_21.spdf
+sp::coordinates(ModernTornTracks) <- ~ slon + elon + slat  + elat
+ModernTornTracks <- st_as_sf(ModernTornTracks)
+st_crs(ModernTornTracks) <- WGS84
+```
+
+```{r, eval = FALSE}
+#save(ModernTorns, ModernTornTracks, file = "ModernTornadoes.RData")
+```
+
+
