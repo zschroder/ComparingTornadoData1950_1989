@@ -4,7 +4,7 @@ author: "Zoe Schroder"
 date: '2023-03-28'
 output: html_document
 ---
-Hello. 
+
 ```{r}
 load("HistoricalTornadoes.RData")
 #HistTorns <- SigTorns
@@ -20,7 +20,7 @@ US_LCC <- "+proj=lcc +lat_1=33 +lat_2=45 +lat_0=39 +lon_0=-96 +x_0=0 +y_0=0 +ell
 ```
 
 Coordinate Reference Systems you may need:
-```{r, eval = FALSE}
+```{r}
 WGS84 <- 4326
 ```
 
@@ -49,7 +49,19 @@ st_crs(ModernTornTracks) <- WGS84
 ```
 
 ```{r, eval = FALSE}
+slon <- ModernTornTracks$slon
+slat <- ModernTornTracks$slat
+ModernTorns <- cbind(ModernTorns, slon, slat)
+```
+
+
+```{r, eval = FALSE}
 #save(ModernTorns, ModernTornTracks, file = "ModernTornadoes.RData")
 ```
 
+## Define clusters for Historical Tornadoes:
+
+
+
+## Define clusters for Modern Tornadoes:
 
