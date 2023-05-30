@@ -232,7 +232,25 @@ st_crs(ModernTornTracks) <- WGS84
 #save(ModernTorns, ModernTornTracks, file = "ModernTornadoes.RData")
 ```
 
+```{r}
+library(tidyverse)
+library(sf)
 
+
+table_sf <- Torn50_21.spdf %>%
+  group_by(NOMBRE) %>%
+  unite(start, slon, slat) %>% # collect coords into one column for reshaping
+  unite(end, elon, elat) %>%
+  filter(end != "NA_NA") %>% # remove nas (last points in a NOMBRE group don't start lines)
+  gather(start_end, coords, start, end) %>% # reshape to long
+  separate(coords, c("LONG", "LAT"), sep = "_") %>% # convert our text coordinates back to individual numeric columns
+  mutate_at(vars(LONG, LAT), as.numeric) %>%
+  st_as_sf(coords = c("LONG", "LAT")) %>% # create points
+  group_by(NOMBRE, INT, lineid) %>%
+  summarise() %>% # union points into lines using our created lineid
+  st_cast("LINESTRING")
+
+```
 
 
 
