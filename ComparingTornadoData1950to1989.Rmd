@@ -5,14 +5,6 @@ date: '2023-03-28'
 output: html_document
 ---
 
-```{r}
-load("HistoricalTornadoes.RData")
-#HistTorns <- SigTorns
-#HistTornTracks <- SigTornTracks
-#save(HistTorns, HistTornTracks, file = "HistoricalTornadoes.RData")
-load("ModernTornadoes.RData")
-```
-
 Projections you may need: 
 ```{r}
 merc <- "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
@@ -24,14 +16,107 @@ Coordinate Reference Systems you may need:
 WGS84 <- 4326
 ```
 
-The modern tornado data comes from: https://www.spc.noaa.gov/wcm/#data
+Install the packages for this project: 
 
-Load the Modern Tornado Record in to the R workspace: 
+```{r}
+suppressMessages(library(sf))
+suppressMessages(library(dplyr))
+suppressMessages(library(lubridate))
+suppressMessages(library(lutz))
+suppressMessages(library(xts))
+suppressMessages(library(chron))
+```
+
+## Historical Tornado Data
+
+Load the original Significant Tornado data into this session. 
+```{r, eval = FALSE}
+load("OriginalHistoricalTornadoData.RData")
+```
+
+Save the line (tornado track) geometry for later use. 
+```{r, eval = FALSE}
+SigTor_geom <- SigTor$geometry 
+```
+
+Calculate the casualties, path of the damage area, and abbreviation of the month. 
+Separate the date: 
+```{r, eval = FALSE}
+SigTor <- SigTor %>%
+  mutate(DateTime = as.POSIXct(paste(date, time), format="%Y-%m-%d %H:%M:%S"), 
+         cas = inj + fat,
+         AreaPath = len * wid,
+         Ma = factor(month.abb[mo], levels = month.abb[1:12])) %>%
+  sf::st_sf()
+dim(SigTor)[1]
+```
+
+Compute the Energy Dissipation (ED) where $A_p$ is the area of the path, $\rho$ is area density [1 kg/m^3]  $v_j$ is the midpoint wind speed for each rating, and $w_j$ is the corresponding fraction of path area by EF rating. With no upper bound on the EF5 wind speeds, the midpoint wind speed is set at 97 m~s$^{-1}$ (7.5 m~s$^{-1}$ above the threshold wind speed consistent with the EF4 midpoint speed relative to its threshold)
+```{r, eval = FALSE}
+perc <- c(1, 0, 0, 0, 0, 0, 
+          .772, .228, 0, 0, 0, 0,
+          .616, .268, .115, 0, 0, 0,
+          .529, .271, .133, .067, 0, 0,
+          .543, .238, .131, .056, .032, 0,
+          .538, .223, .119, .07, .033, .017)
+percM <- matrix(perc, ncol = 6, byrow = TRUE)
+threshW <- c(29.06, 38.45, 49.62, 60.8, 74.21, 89.41)
+midptW <- c(diff(threshW)/2 + threshW[-length(threshW)], threshW[length(threshW)] + 7.5)
+mag_num <- as.numeric(substr(SigTor$mag,2,2))
+ef <- mag_num + 1 
+EW3 <- numeric()
+for(i in 1:length(ef)) EW3[i] = midptW^3 %*% percM[ef[i], ]
+SigTor <- SigTor %>%
+  mutate(ED = EW3 * AreaPath) #Units of ______
+``` 
+
+Get Tornado touchdown (point) data: 
+```{r, eval = FALSE}
+SigTor.sfdf <- st_drop_geometry(SigTor)
+
+SigTor.sfdf <- SigTor.sfdf %>%
+  st_as_sf(coords = c("slon", "slat"), crs = 4326)
+slat <- SigTor$slat
+slon = SigTor$slon
+
+SigTor.sfdf <- cbind(SigTor.sfdf, slat, slon)
+```
+
+Calculate the Convective day!:
+```{r, eval = FALSE}
+SigTor.sfdf <- SigTor.sfdf %>%
+  mutate(cDateTime = DateTime - as.difftime(6, unit = "hours"),
+         hour = hour(DateTime),
+         cDate = as.Date(as_datetime(ifelse(hour < 6, (DateTime - 86400), cDateTime), tz = Sys.timezone()))) %>%
+  sf::st_sf()
+```
+
+Calculate the NARRtime, NARRday, and NARRZtime for each report. 
+```{r, eval = FALSE}
+SigTor.sfdf$Zulu_DateTime <- force_tz(SigTor.sfdf$DateTime, tzone = "UTC")
+NARRtime <- align.time(SigTor.sfdf$Zulu_DateTime, n = (60 * 60 * 3)) + 3600 *3 ###Had to remove the -3600*3
+NARRday = format(as.POSIXct(strptime(NARRtime,"%Y-%m-%d %H:%M:%S",tz="")) ,format = "%Y/%m/%d")
+NARRZtime = format(as.POSIXct(strptime(NARRtime,"%Y-%m-%d %H:%M:%S",tz="")) ,format = "%H")
+
+SigTor.sfdf <- cbind(SigTor.sfdf, NARRday, NARRZtime)
+```
+
+Establish the geometry for a tornado tracks dataset using the original geometry from the Historical Tornadoes data. 
+```{r, eval = FALSE}
+#Tornado Tracks
+SigTornTracks<- st_as_sf(cbind(st_drop_geometry(SigTor.sfdf), SigTor_geom))
+SigTorns <- SigTor.sfdf
+```
+
+
+## Modern Tornado Data
+
+Load the Modern Tornado Record in to the R workspace. The modern tornado data comes from: https://www.spc.noaa.gov/wcm/#data. This data is from 1950 to 2021
 ```{r, eval = FALSE}
 Torn50_21.spdf <- read.csv(file = "1950-2021_actual_tornadoes.csv")
 ```
 
-Modern Tornado Record (as points): 
+Set up the data for the  Modern Tornado Record (as points): 
 ```{r, eval = FALSE}
 ModernTorns <- Torn50_21.spdf
 sp::coordinates(ModernTorns) <- ~ slon + slat
@@ -39,7 +124,7 @@ ModernTorns <- st_as_sf(ModernTorns)
 st_crs(ModernTorns) <- WGS84
 ```
 
-Modern Tornado Record (as tracks): 
+Set up the data for the  Modern Tornado Record (as tracks): 
 
 ```{r, eval = FALSE}
 ModernTornTracks <- Torn50_21.spdf
@@ -48,15 +133,43 @@ ModernTornTracks <- st_as_sf(ModernTornTracks)
 st_crs(ModernTornTracks) <- WGS84
 ```
 
+Re-add the start lat and start lon to the Modern Tracks data
 ```{r, eval = FALSE}
 slon <- ModernTornTracks$slon
 slat <- ModernTornTracks$slat
 ModernTorns <- cbind(ModernTorns, slon, slat)
 ```
 
-
 ```{r, eval = FALSE}
 #save(ModernTorns, ModernTornTracks, file = "ModernTornadoes.RData")
+```
+
+## Load the Historical Tornado Data: 
+
+This data set includes the **HistTorns** and the **HistTornTracks** data. The **HistTorns** is the point data for the tornado genesis location. The **HistTornTracks** is the line data for the entire track (path) of the tornado.
+
+```{r}
+load("HistoricalTornadoes.RData")
+```
+
+## Load the Modern Tornado Data: 
+
+This data set includes the **ModernTorns** and the **ModernTornTracks** data for all recorded tornadoes between 1950 and 2021. The **ModernTorns** is the point data for the tornado genesis location. The **ModernTornTracks** is the line data for the entire track (path) of the tornado.
+
+```{r}
+load("ModernTornadoes.RData")
+```
+
+
+## Data Cleaning: 
+
+Remove tornadoes in Hawaii, Alaska, and Puerto Rico and those occurring before 1994. That year marks the beginning of comprehensive WSR-88D radar. For missing EF ratings use the modification rules (if/else) defined here: https://www.spc.noaa.gov/wcm/OneTor_F-scale-modifications.pdf 
+```{r}
+All_Tornadoes <- Tor.sfdf %>%
+  filter(yr >= 1994,
+         !st %in% c("AK", "PR", "HI")) %>%
+  mutate(mag = ifelse(mag == -9 & len <= 5, 0, mag),
+         mag = ifelse(mag == -9 & len > 5, 1, mag))
 ```
 
 ## Define clusters for Historical Tornadoes:
