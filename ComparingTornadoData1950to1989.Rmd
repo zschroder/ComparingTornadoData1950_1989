@@ -35,6 +35,14 @@ Load the original Significant Tornado data into this session.
 load("OriginalHistoricalTornadoData.RData")
 ```
 
+Remove tornadoes in Hawaii, Alaska, and Puerto Rico and those occurring before 1994. That year marks the beginning of comprehensive WSR-88D radar. For missing EF ratings use the modification rules (if/else) defined here: https://www.spc.noaa.gov/wcm/OneTor_F-scale-modifications.pdf 
+```{r, eval = FALSE}
+SigTor <- SigTor %>%
+  filter(!st %in% c("AK", "PR", "HI")) %>%
+  mutate(mag = ifelse(mag == -9 & len <= 5, 0, mag),
+         mag = ifelse(mag == -9 & len > 5, 1, mag))
+```
+
 Save the line (tornado track) geometry for later use. 
 ```{r, eval = FALSE}
 SigTor_geom <- SigTor$geometry 
@@ -44,101 +52,6 @@ Calculate the casualties, path of the damage area, and abbreviation of the month
 Separate the date: 
 ```{r, eval = FALSE}
 SigTor <- SigTor %>%
-  mutate(DateTime = as.POSIXct(paste(date, time), format="%Y-%m-%d %H:%M:%S"), 
-         cas = inj + fat,
-         AreaPath = len * wid,
-         Ma = factor(month.abb[mo], levels = month.abb[1:12])) %>%
-  sf::st_sf()
-dim(SigTor)[1]
-```
-
-Compute the Energy Dissipation (ED) where $A_p$ is the area of the path, $\rho$ is area density [1 kg/m^3]  $v_j$ is the midpoint wind speed for each rating, and $w_j$ is the corresponding fraction of path area by EF rating. With no upper bound on the EF5 wind speeds, the midpoint wind speed is set at 97 m~s$^{-1}$ (7.5 m~s$^{-1}$ above the threshold wind speed consistent with the EF4 midpoint speed relative to its threshold)
-```{r, eval = FALSE}
-perc <- c(1, 0, 0, 0, 0, 0, 
-          .772, .228, 0, 0, 0, 0,
-          .616, .268, .115, 0, 0, 0,
-          .529, .271, .133, .067, 0, 0,
-          .543, .238, .131, .056, .032, 0,
-          .538, .223, .119, .07, .033, .017)
-percM <- matrix(perc, ncol = 6, byrow = TRUE)
-threshW <- c(29.06, 38.45, 49.62, 60.8, 74.21, 89.41)
-midptW <- c(diff(threshW)/2 + threshW[-length(threshW)], threshW[length(threshW)] + 7.5)
-mag_num <- as.numeric(substr(SigTor$mag,2,2))
-ef <- mag_num + 1 
-EW3 <- numeric()
-for(i in 1:length(ef)) EW3[i] = midptW^3 %*% percM[ef[i], ]
-SigTor <- SigTor %>%
-  mutate(ED = EW3 * AreaPath) #Units of ______
-``` 
-
-Get Tornado touchdown (point) data: 
-```{r, eval = FALSE}
-SigTor.sfdf <- st_drop_geometry(SigTor)
-
-SigTor.sfdf <- SigTor.sfdf %>%
-  st_as_sf(coords = c("slon", "slat"), crs = 4326)
-slat <- SigTor$slat
-slon = SigTor$slon
-
-SigTor.sfdf <- cbind(SigTor.sfdf, slat, slon)
-```
-
-Calculate the Convective day!:
-```{r, eval = FALSE}
-SigTor.sfdf <- SigTor.sfdf %>%
-  mutate(cDateTime = DateTime - as.difftime(6, unit = "hours"),
-         hour = hour(DateTime),
-         cDate = as.Date(as_datetime(ifelse(hour < 6, (DateTime - 86400), cDateTime), tz = Sys.timezone()))) %>%
-  sf::st_sf()
-```
-
-Calculate the NARRtime, NARRday, and NARRZtime for each report. 
-```{r, eval = FALSE}
-SigTor.sfdf$Zulu_DateTime <- force_tz(SigTor.sfdf$DateTime, tzone = "UTC")
-NARRtime <- align.time(SigTor.sfdf$Zulu_DateTime, n = (60 * 60 * 3)) + 3600 *3 ###Had to remove the -3600*3
-NARRday = format(as.POSIXct(strptime(NARRtime,"%Y-%m-%d %H:%M:%S",tz="")) ,format = "%Y/%m/%d")
-NARRZtime = format(as.POSIXct(strptime(NARRtime,"%Y-%m-%d %H:%M:%S",tz="")) ,format = "%H")
-
-SigTor.sfdf <- cbind(SigTor.sfdf, NARRday, NARRZtime)
-```
-
-Establish the geometry for a tornado tracks dataset using the original geometry from the Historical Tornadoes data. 
-```{r, eval = FALSE}
-#Tornado Tracks
-HistTornTracks<- st_as_sf(cbind(st_drop_geometry(SigTor.sfdf), SigTor_geom))
-HistTorns <- SigTor.sfdf
-```
-
-```{r, eval = FALSE}
-#save(HistTorns, HistTornTracks, file = "HistoricalTornadoes.RData")
-```
-
-## Modern Tornado Data
-
-Load the Modern Tornado Record in to the R workspace. The modern tornado data comes from: https://www.spc.noaa.gov/wcm/#data. This data is from 1950 to 2021
-```{r, eval = FALSE}
-Torn50_21.spdf <- read.csv(file = "1950-2022_actual_tornadoes.csv")
-slatitude <- Torn50_21.spdf$slat
-slongitude <- Torn50_21.spdf$slon
-
-sp::coordinates(Torn50_21.spdf) <- ~ slon + slat
-Torn50_21.spdf <- st_as_sf(Torn50_21.spdf)
-st_crs(Torn50_21.spdf) <- 4326
-```
-
-Remove tornadoes in Hawaii, Alaska, and Puerto Rico and those occurring before 1994. That year marks the beginning of comprehensive WSR-88D radar. For missing EF ratings use the modification rules (if/else) defined here: https://www.spc.noaa.gov/wcm/OneTor_F-scale-modifications.pdf 
-```{r}
-All_Tornadoes <- Torn50_21.spdf %>%
-  filter(yr >= 1994,
-         !st %in% c("AK", "PR", "HI")) %>%
-  mutate(mag = ifelse(mag == -9 & len <= 5, 0, mag),
-         mag = ifelse(mag == -9 & len > 5, 1, mag))
-```
-
-Calculate the casualties, path of the damage area, and abbreviation of the month. 
-Separate the date: 
-```{r, eval = FALSE}
-SigTor <- Torn50_21.spdf %>%
   mutate(DateTime = as.POSIXct(paste(yr, mo, dy, time), format = "%Y%m%d%H:%M:%S"),
          Hour = hour(DateTime),
          Year = year(DateTime),
@@ -167,90 +80,164 @@ perc <- c(1, 0, 0, 0, 0, 0,
 percM <- matrix(perc, ncol = 6, byrow = TRUE)
 threshW <- c(29.06, 38.45, 49.62, 60.8, 74.21, 89.41)
 midptW <- c(diff(threshW)/2 + threshW[-length(threshW)], threshW[length(threshW)] + 7.5)
-ef <- All_Tornadoes$mag + 1
+mag_num <- as.numeric(substr(SigTor$mag,2,2))
+ef <- SigTor$mag_num + 1
 EW3 <- numeric()
 for(i in 1:length(ef)) EW3[i] = midptW^3 %*% percM[ef[i], ]
 SigTor <- SigTor %>%
   mutate(ED = EW3 * AreaPath) #Units of ______
 ``` 
-```{r}
-SigTor <- cbind(SigTor, slatitude, slongitude)
+
+Calculate the NARRtime, NARRday, and NARRZtime for each report. 
+```{r, eval = FALSE}
+Zulu_DateTime <- force_tz(SigTor$DateTime, tzone = "UTC")
+NARRtime_UTC <- align.time(Zulu_DateTime, n = (60 * 60 * 3)) + 3600 *3 ###Had to remove the -3600*3
+NARRday = format(as.POSIXct(strptime(NARRtime_UTC,"%Y-%m-%d %H:%M:%S",tz="")) ,format = "%Y/%m/%d")
+NARRZtime = format(as.POSIXct(strptime(NARRtime_UTC,"%Y-%m-%d %H:%M:%S",tz="")) ,format = "%H")
+
+SigTor <- cbind(SigTor, NARRtime_UTC, NARRday, NARRZtime)
 ```
 
 Get Tornado touchdown (point) data: 
 ```{r, eval = FALSE}
-SigTor.sfdf <- st_drop_geometry(SigTor)
+SigTor.spdf <- st_drop_geometry(SigTor)
 
-SigTor.sfdf <- SigTor.sfdf %>%
-  st_as_sf(coords = c("slongitude", "slatitude"), crs = 4326)
+SigTor.spdf <- SigTor.spdf %>%
+  st_as_sf(coords = c("slon", "slat"), crs = 4326)
 slat <- SigTor$slat
 slon = SigTor$slon
+SigTor.spdf <- SigTor.spdf[, !names(SigTor.spdf) %in% c("cDateTime")]
 
-SigTor.sfdf <- cbind(SigTor.sfdf, slat, slon)
+HistTorns <- cbind(SigTor.spdf, slat, slon)
 ```
 
-Calculate the Convective day!:
+Establish the geometry for a tornado tracks dataset using the original geometry from the Historical Tornadoes data. 
 ```{r, eval = FALSE}
-SigTor.sfdf <- SigTor.sfdf %>%
-  mutate(cDateTime = DateTime - as.difftime(6, unit = "hours"),
-         hour = hour(DateTime),
-         cDate = as.Date(as_datetime(ifelse(hour < 6, (DateTime - 86400), cDateTime), tz = Sys.timezone()))) %>%
-  sf::st_sf()
+#Tornado Tracks
+HistTornTracks<- st_as_sf(cbind(st_drop_geometry(HistTorns), SigTor_geom))
 ```
+
+```{r, eval = FALSE}
+#save(HistTorns, HistTornTracks, file = "HistoricalTornadoes.RData")
+```
+
+#########################################################################################
+
+## Modern Tornado Data
+
+Load the Modern Tornado Record in to the R workspace. The modern tornado data comes from: https://www.spc.noaa.gov/wcm/#data. This data is from 1950 to 2021
+```{r, eval = FALSE}
+Torn50_22.spdf <- read.csv(file = "1950-2022_actual_tornadoes.csv")
+slat <- Torn50_22.spdf$slat
+slon <- Torn50_22.spdf$slon
+
+sp::coordinates(Torn50_22.spdf) <- ~ slon + slat
+Torn50_22.spdf <- st_as_sf(Torn50_22.spdf)
+st_crs(Torn50_22.spdf) <- 4326
+
+Torn50_22.spdf <- cbind(Torn50_22.spdf, slat, slon)
+```
+
+Obtain the tornado track geometry for later use.  
+```{r, eval = FALSE}
+Torn50_22.sldf <- st_read("C:/Users/SCHRODEZ/Desktop/Research_Projects/ComparingTornadoData1950_1989/1950-2022-torn-aspath/1950-2022-torn-aspath.shp")
+Torn50_22.sldf <- st_as_sf(Torn50_22.sldf)
+st_crs(Torn50_22.sldf) <- 4326
+
+Torn50_22.sldf <- Torn50_22.sldf %>%
+  filter(!st %in% c("AK", "PR", "HI"))
+
+trackgeometry <- Torn50_22.sldf$geometry
+```
+
+Remove tornadoes in Hawaii, Alaska, and Puerto Rico and those occurring before 1994. That year marks the beginning of comprehensive WSR-88D radar. For missing EF ratings use the modification rules (if/else) defined here: https://www.spc.noaa.gov/wcm/OneTor_F-scale-modifications.pdf 
+```{r, eval = FALSE}
+Torn50_22.spdf <- Torn50_22.spdf %>%
+  filter(!st %in% c("AK", "PR", "HI")) %>%
+  mutate(mag = ifelse(mag == -9 & len <= 5, 0, mag),
+         mag = ifelse(mag == -9 & len > 5, 1, mag))
+```
+
+Calculate the casualties, path of the damage area, and abbreviation of the month. 
+Separate the date: 
+```{r, eval = FALSE}
+Torn50_22.spdf <- Torn50_22.spdf %>%
+  mutate(DateTime = as.POSIXct(paste(yr, mo, dy, time), format = "%Y%m%d%H:%M:%S"),
+         Hour = hour(DateTime),
+         Year = year(DateTime),
+         cDateTime = DateTime - as.difftime(6, unit = "hours"),
+         cDate = as.Date(as_datetime(ifelse(Hour < 6, (DateTime - 86400), cDateTime), tz = Sys.timezone())),
+         Length = len * 1609.34,
+         Length = ifelse(Length == 0, min(Length[Length > 0]), Length), #takes care of zero length
+         Width = wid * .9144,
+         Width = ifelse(Width == 0, min(Width[Width > 0]), Width), #takes care of zero width
+         Width = ifelse(Year >= 1995, Width * pi/4, Width), #takes care of change: avg to max
+         cas = inj + fat,
+         AreaPath = Length * Width,
+         Ma = factor(month.abb[mo], levels = month.abb[1:12])) %>%
+  sf::st_sf()
+dim(Torn50_22.spdf)[1]
+```
+
+Compute the Energy Dissipation (ED) where $A_p$ is the area of the path, $\rho$ is area density [1 kg/m^3]  $v_j$ is the midpoint wind speed for each rating, and $w_j$ is the corresponding fraction of path area by EF rating. With no upper bound on the EF5 wind speeds, the midpoint wind speed is set at 97 m~s$^{-1}$ (7.5 m~s$^{-1}$ above the threshold wind speed consistent with the EF4 midpoint speed relative to its threshold)
+```{r, eval = FALSE}
+perc <- c(1, 0, 0, 0, 0, 0, 
+          .772, .228, 0, 0, 0, 0,
+          .616, .268, .115, 0, 0, 0,
+          .529, .271, .133, .067, 0, 0,
+          .543, .238, .131, .056, .032, 0,
+          .538, .223, .119, .07, .033, .017)
+percM <- matrix(perc, ncol = 6, byrow = TRUE)
+threshW <- c(29.06, 38.45, 49.62, 60.8, 74.21, 89.41)
+midptW <- c(diff(threshW)/2 + threshW[-length(threshW)], threshW[length(threshW)] + 7.5)
+ef <- Torn50_22.spdf$mag + 1
+EW3 <- numeric()
+for(i in 1:length(ef)) EW3[i] = midptW^3 %*% percM[ef[i], ]
+Torn50_22.spdf <- Torn50_22.spdf %>%
+  mutate(ED = EW3 * AreaPath) #Units of ______
+``` 
 
 Calculate the NARRtime, NARRday, and NARRZtime for each report. 
 ```{r, eval = FALSE}
-SigTor.sfdf$Zulu_DateTime <- force_tz(SigTor.sfdf$DateTime, tzone = "UTC")
-NARRtime <- align.time(SigTor.sfdf$Zulu_DateTime, n = (60 * 60 * 3)) + 3600 *3 ###Had to remove the -3600*3
-NARRday = format(as.POSIXct(strptime(NARRtime,"%Y-%m-%d %H:%M:%S",tz="")) ,format = "%Y/%m/%d")
-NARRZtime = format(as.POSIXct(strptime(NARRtime,"%Y-%m-%d %H:%M:%S",tz="")) ,format = "%H")
+Zulu_DateTime <- force_tz(Torn50_22.spdf$DateTime, tzone = "UTC")
+NARRtime_UTC <- align.time(Zulu_DateTime, n = (60 * 60 * 3)) + 3600 *3 ###Had to remove the -3600*3
+NARRday = format(as.POSIXct(strptime(NARRtime_UTC,"%Y-%m-%d %H:%M:%S",tz="")) ,format = "%Y/%m/%d")
+NARRZtime = format(as.POSIXct(strptime(NARRtime_UTC,"%Y-%m-%d %H:%M:%S",tz="")) ,format = "%H")
 
-SigTor.sfdf <- cbind(SigTor.sfdf, NARRday, NARRZtime)
+Torn50_22.spdf <- cbind(Torn50_22.spdf, NARRtime_UTC, NARRday, NARRZtime)
 ```
 
-Set up the data for the  Modern Tornado Record (as points): 
-```{r}
-ModernTorns <- SigTor.sfdf
+Remove the cDateTime Column
+```{r, eval = FALSE}
+Torn50_22.spdf <- Torn50_22.spdf[, !names(Torn50_22.spdf) %in% c("cDateTime")]
+
+ModernTorns <- Torn50_22.spdf
 ```
 
 Set up the data for the  Modern Tornado Record (as tracks): 
 ```{r, eval = FALSE}
-ModernTornTracks <- SigTor.sfdf
-ModernTornTracks <- st_drop_geometry(ModernTornTracks)
-sp::coordinates(ModernTornTracks) <- ~ slon + elon + slat + elat
+ModernTornTracks <- st_drop_geometry(Torn50_22.spdf)
+ModernTornTracks <- cbind(ModernTornTracks, trackgeometry)
+
 ModernTornTracks <- st_as_sf(ModernTornTracks)
-
-test <-  ModernTornTracks %>%
-  st_zm() %>%
-  sf::st_cast("LINESTRING")
-
-st_crs(ModernTornTracks) <- WGS84
+st_crs(ModernTornTracks) <- 4326
 ```
-
 
 ```{r, eval = FALSE}
 #save(ModernTorns, ModernTornTracks, file = "ModernTornadoes.RData")
 ```
 
-```{r}
-library(tidyverse)
-library(sf)
 
 
-table_sf <- Torn50_21.spdf %>%
-  group_by(NOMBRE) %>%
-  unite(start, slon, slat) %>% # collect coords into one column for reshaping
-  unite(end, elon, elat) %>%
-  filter(end != "NA_NA") %>% # remove nas (last points in a NOMBRE group don't start lines)
-  gather(start_end, coords, start, end) %>% # reshape to long
-  separate(coords, c("LONG", "LAT"), sep = "_") %>% # convert our text coordinates back to individual numeric columns
-  mutate_at(vars(LONG, LAT), as.numeric) %>%
-  st_as_sf(coords = c("LONG", "LAT")) %>% # create points
-  group_by(NOMBRE, INT, lineid) %>%
-  summarise() %>% # union points into lines using our created lineid
-  st_cast("LINESTRING")
 
-```
+
+
+
+
+
+
+
+
 
 
 
