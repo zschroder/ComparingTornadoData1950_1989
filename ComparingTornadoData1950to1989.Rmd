@@ -227,19 +227,7 @@ st_crs(ModernTornTracks) <- 4326
 #save(ModernTorns, ModernTornTracks, file = "ModernTornadoes.RData")
 ```
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+###############################################################################
 
 ## Load the Historical Tornado Data: 
 
@@ -260,18 +248,7 @@ load("ModernTornadoes.RData")
 
 ## Data Cleaning: 
 
-Remove tornadoes in Hawaii, Alaska, and Puerto Rico and those occurring before 1994. That year marks the beginning of comprehensive WSR-88D radar. For missing EF ratings use the modification rules (if/else) defined here: https://www.spc.noaa.gov/wcm/OneTor_F-scale-modifications.pdf 
-```{r}
-All_Tornadoes <- Tor.sfdf %>%
-  filter(yr >= 1994,
-         !st %in% c("AK", "PR", "HI")) %>%
-  mutate(mag = ifelse(mag == -9 & len <= 5, 0, mag),
-         mag = ifelse(mag == -9 & len > 5, 1, mag))
-```
-
 ## Define clusters for Historical Tornadoes:
-
-
 
 ## Define clusters for Modern Tornadoes:
 
