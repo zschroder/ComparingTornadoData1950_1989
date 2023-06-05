@@ -60,5 +60,16 @@ Load the Modern Outbreak data into this session.
 load("ModernOutbreaks.RData")
 ```
 
+## Data Analysis: 
 
+```{r}
+HistBigDays.sfdfT %>%
+  arrange(-nT) %>%
+  head(10)
+```
 
+```{r}
+ModernBigDays.sfdfT %>%
+  arrange(-nT) %>%
+  head(10)
+```
