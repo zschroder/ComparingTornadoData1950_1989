@@ -34,6 +34,13 @@ suppressMessages(library(sp))
 ## Historical Tornado Outbreak Data
 
 Load the Historical Outbreak data into this session. 
+
+`HistBigDayCentroids`: The convex hull (boundary) of all touchdown locations for each big day. 
+`HistBigDays.sfdfT`: Complete list of any and all convective days with at least 6 tornadoes. A convective day is defined as a 24-hour period between 6 AM and 6 AM. In total, there are 188 historical big days in the data set. 
+`HistBigDayTornadoes`: List of all tornadoes that exist on a Big Day with at least 6 tornadoes. In total, 1881 tornadoes occur on a big day. 
+`HistGroups.sfdfT`: All historical tornadoes grouped into clusters based on space-time distance. The groups range from 1 day to 3 day events.
+`HistTorns50_89`: All historical tornadoes between 1950 and 1989 reported in the Grazulis's Significant Tornadoes 1880 - 1989 book. In total, there are 5,692 tornadoes during this time period. 
+
 ```{r}
 load("HistoricalOutbreaks.RData")
 ```
@@ -42,6 +49,16 @@ load("HistoricalOutbreaks.RData")
 ## Modern Tornado Outbreak Data
 
 Load the Modern Outbreak data into this session. 
+
+`ModernBigDayCentroids`: The convex hull (boundary) of all touchdown locations for each big day. 
+`ModernBigDays.sfdfT`: Complete list of any and all convective days with at least 6 tornadoes. A convective day is defined as a 24-hour period between 6 AM and 6 AM. In total, there are 759 historical big days in the data set. 
+`ModernBigDayTornadoes`: List of all tornadoes that exist on a Big Day with at least 6 tornadoes. In total, 8531 tornadoes occur on a big day. 
+`ModernGroups.sfdfT`: All modern tornadoes grouped into clusters based on space-time distance. In total there are 7395 groups. The groups range from 1 day to 3 day events.
+`ModernTorns50_89`: All modern tornadoes between 1950 and 1989 reported in the SPC tornado data set. In total, there are 19736 tornadoes during this time period. 
+
 ```{r}
 load("ModernOutbreaks.RData")
 ```
+
+
+
