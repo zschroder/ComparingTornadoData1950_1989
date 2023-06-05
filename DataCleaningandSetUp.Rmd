@@ -1,0 +1,563 @@
+---
+title: "Data Cleaning and Set Up"
+author: "Zoe Schroder"
+date: '2023-03-28'
+output: html_document
+---
+
+Projections you may need: 
+```{r}
+merc <- "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
+US_LCC <- "+proj=lcc +lat_1=33 +lat_2=45 +lat_0=39 +lon_0=-96 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m no_defs"
+```
+
+Coordinate Reference Systems you may need:
+
+https://spatialreference.org/ref/esri/usa-contiguous-lambert-conformal-conic/
+```{r}
+WGS84 <- 4326
+US_LCC <- "+proj=lcc +lat_1=33 +lat_2=45 +lat_0=39 +lon_0=-96 +x_0=0 +y_0=0 +ellps=GRS80 +datum=NAD83 +units=m +no_defs"
+```
+
+Install the packages for this project: 
+
+```{r}
+suppressMessages(library(sf))
+suppressMessages(library(dplyr))
+suppressMessages(library(lubridate))
+suppressMessages(library(lutz))
+suppressMessages(library(xts))
+suppressMessages(library(chron))
+suppressMessages(library(sp))
+```
+
+## Historical Tornado Data
+
+Load the original Significant Tornado data into this session. 
+```{r, eval = FALSE}
+load("OriginalHistoricalTornadoData.RData")
+```
+
+Remove tornadoes in Hawaii, Alaska, and Puerto Rico and those occurring before 1994. That year marks the beginning of comprehensive WSR-88D radar. For missing EF ratings use the modification rules (if/else) defined here: https://www.spc.noaa.gov/wcm/OneTor_F-scale-modifications.pdf 
+```{r, eval = FALSE}
+SigTor <- SigTor %>%
+  filter(!st %in% c("AK", "PR", "HI")) %>%
+  mutate(mag = ifelse(mag == -9 & len <= 5, 0, mag),
+         mag = ifelse(mag == -9 & len > 5, 1, mag))
+```
+
+Save the line (tornado track) geometry for later use. 
+```{r, eval = FALSE}
+SigTor_geom <- SigTor$geometry 
+```
+
+Calculate the casualties, path of the damage area, and abbreviation of the month. 
+Separate the date: 
+```{r, eval = FALSE}
+SigTor <- SigTor %>%
+  mutate(DateTime = as.POSIXct(paste(yr, mo, dy, time), format = "%Y%m%d%H:%M:%S"),
+         Hour = hour(DateTime),
+         Year = year(DateTime),
+         cDateTime = DateTime - as.difftime(6, unit = "hours"),
+         cDate = as.Date(as_datetime(ifelse(Hour < 6, (DateTime - 86400), cDateTime), tz = Sys.timezone())),
+         Length = len * 1609.34,
+         Length = ifelse(Length == 0, min(Length[Length > 0]), Length), #takes care of zero length
+         Width = wid * .9144,
+         Width = ifelse(Width == 0, min(Width[Width > 0]), Width), #takes care of zero width
+         Width = ifelse(Year >= 1995, Width * pi/4, Width), #takes care of change: avg to max
+         cas = inj + fat,
+         AreaPath = Length * Width,
+         Ma = factor(month.abb[mo], levels = month.abb[1:12])) %>%
+  sf::st_sf()
+dim(SigTor)[1]
+```
+
+Compute the Energy Dissipation (ED) where $A_p$ is the area of the path, $\rho$ is area density [1 kg/m^3]  $v_j$ is the midpoint wind speed for each rating, and $w_j$ is the corresponding fraction of path area by EF rating. With no upper bound on the EF5 wind speeds, the midpoint wind speed is set at 97 m~s$^{-1}$ (7.5 m~s$^{-1}$ above the threshold wind speed consistent with the EF4 midpoint speed relative to its threshold)
+```{r, eval = FALSE}
+perc <- c(1, 0, 0, 0, 0, 0, 
+          .772, .228, 0, 0, 0, 0,
+          .616, .268, .115, 0, 0, 0,
+          .529, .271, .133, .067, 0, 0,
+          .543, .238, .131, .056, .032, 0,
+          .538, .223, .119, .07, .033, .017)
+percM <- matrix(perc, ncol = 6, byrow = TRUE)
+threshW <- c(29.06, 38.45, 49.62, 60.8, 74.21, 89.41)
+midptW <- c(diff(threshW)/2 + threshW[-length(threshW)], threshW[length(threshW)] + 7.5)
+mag_num <- as.numeric(substr(SigTor$mag,2,2))
+ef <- SigTor$mag_num + 1
+EW3 <- numeric()
+for(i in 1:length(ef)) EW3[i] = midptW^3 %*% percM[ef[i], ]
+SigTor <- SigTor %>%
+  mutate(ED = EW3 * AreaPath) #Units of ______
+``` 
+
+Calculate the NARRtime, NARRday, and NARRZtime for each report. 
+```{r, eval = FALSE}
+Zulu_DateTime <- force_tz(SigTor$DateTime, tzone = "UTC")
+NARRtime_UTC <- align.time(Zulu_DateTime, n = (60 * 60 * 3)) + 3600 *3 ###Had to remove the -3600*3
+NARRday = format(as.POSIXct(strptime(NARRtime_UTC,"%Y-%m-%d %H:%M:%S",tz="")) ,format = "%Y/%m/%d")
+NARRZtime = format(as.POSIXct(strptime(NARRtime_UTC,"%Y-%m-%d %H:%M:%S",tz="")) ,format = "%H")
+
+SigTor <- cbind(SigTor, NARRtime_UTC, NARRday, NARRZtime)
+```
+
+Get Tornado touchdown (point) data: 
+```{r, eval = FALSE}
+SigTor.spdf <- st_drop_geometry(SigTor)
+
+SigTor.spdf <- SigTor.spdf %>%
+  st_as_sf(coords = c("slon", "slat"), crs = 4326)
+slat <- SigTor$slat
+slon = SigTor$slon
+SigTor.spdf <- SigTor.spdf[, !names(SigTor.spdf) %in% c("cDateTime")]
+
+HistTorns <- cbind(SigTor.spdf, slat, slon)
+```
+
+Establish the geometry for a tornado tracks dataset using the original geometry from the Historical Tornadoes data. 
+```{r, eval = FALSE}
+#Tornado Tracks
+HistTornTracks<- st_as_sf(cbind(st_drop_geometry(HistTorns), SigTor_geom))
+```
+
+```{r, eval = FALSE}
+#save(HistTorns, HistTornTracks, file = "HistoricalTornadoes.RData")
+```
+
+#########################################################################################
+
+## Modern Tornado Data
+
+Load the Modern Tornado Record in to the R workspace. The modern tornado data comes from: https://www.spc.noaa.gov/wcm/#data. This data is from 1950 to 2021
+```{r, eval = FALSE}
+Torn50_22.spdf <- read.csv(file = "1950-2022_actual_tornadoes.csv")
+slat <- Torn50_22.spdf$slat
+slon <- Torn50_22.spdf$slon
+
+sp::coordinates(Torn50_22.spdf) <- ~ slon + slat
+Torn50_22.spdf <- st_as_sf(Torn50_22.spdf)
+st_crs(Torn50_22.spdf) <- 4326
+
+Torn50_22.spdf <- cbind(Torn50_22.spdf, slat, slon)
+```
+
+Obtain the tornado track geometry for later use.  
+```{r, eval = FALSE}
+Torn50_22.sldf <- st_read("C:/Users/SCHRODEZ/Desktop/Research_Projects/ComparingTornadoData1950_1989/1950-2022-torn-aspath/1950-2022-torn-aspath.shp")
+Torn50_22.sldf <- st_as_sf(Torn50_22.sldf)
+st_crs(Torn50_22.sldf) <- 4326
+
+Torn50_22.sldf <- Torn50_22.sldf %>%
+  filter(!st %in% c("AK", "PR", "HI"))
+
+trackgeometry <- Torn50_22.sldf$geometry
+```
+
+Remove tornadoes in Hawaii, Alaska, and Puerto Rico and those occurring before 1994. That year marks the beginning of comprehensive WSR-88D radar. For missing EF ratings use the modification rules (if/else) defined here: https://www.spc.noaa.gov/wcm/OneTor_F-scale-modifications.pdf 
+```{r, eval = FALSE}
+Torn50_22.spdf <- Torn50_22.spdf %>%
+  filter(!st %in% c("AK", "PR", "HI")) %>%
+  mutate(mag = ifelse(mag == -9 & len <= 5, 0, mag),
+         mag = ifelse(mag == -9 & len > 5, 1, mag))
+```
+
+Calculate the casualties, path of the damage area, and abbreviation of the month. 
+Separate the date: 
+```{r, eval = FALSE}
+Torn50_22.spdf <- Torn50_22.spdf %>%
+  mutate(DateTime = as.POSIXct(paste(yr, mo, dy, time), format = "%Y%m%d%H:%M:%S"),
+         Hour = hour(DateTime),
+         Year = year(DateTime),
+         cDateTime = DateTime - as.difftime(6, unit = "hours"),
+         cDate = as.Date(as_datetime(ifelse(Hour < 6, (DateTime - 86400), cDateTime), tz = Sys.timezone())),
+         Length = len * 1609.34,
+         Length = ifelse(Length == 0, min(Length[Length > 0]), Length), #takes care of zero length
+         Width = wid * .9144,
+         Width = ifelse(Width == 0, min(Width[Width > 0]), Width), #takes care of zero width
+         Width = ifelse(Year >= 1995, Width * pi/4, Width), #takes care of change: avg to max
+         cas = inj + fat,
+         AreaPath = Length * Width,
+         Ma = factor(month.abb[mo], levels = month.abb[1:12])) %>%
+  sf::st_sf()
+dim(Torn50_22.spdf)[1]
+```
+
+Compute the Energy Dissipation (ED) where $A_p$ is the area of the path, $\rho$ is area density [1 kg/m^3]  $v_j$ is the midpoint wind speed for each rating, and $w_j$ is the corresponding fraction of path area by EF rating. With no upper bound on the EF5 wind speeds, the midpoint wind speed is set at 97 m~s$^{-1}$ (7.5 m~s$^{-1}$ above the threshold wind speed consistent with the EF4 midpoint speed relative to its threshold)
+```{r, eval = FALSE}
+perc <- c(1, 0, 0, 0, 0, 0, 
+          .772, .228, 0, 0, 0, 0,
+          .616, .268, .115, 0, 0, 0,
+          .529, .271, .133, .067, 0, 0,
+          .543, .238, .131, .056, .032, 0,
+          .538, .223, .119, .07, .033, .017)
+percM <- matrix(perc, ncol = 6, byrow = TRUE)
+threshW <- c(29.06, 38.45, 49.62, 60.8, 74.21, 89.41)
+midptW <- c(diff(threshW)/2 + threshW[-length(threshW)], threshW[length(threshW)] + 7.5)
+ef <- Torn50_22.spdf$mag + 1
+EW3 <- numeric()
+for(i in 1:length(ef)) EW3[i] = midptW^3 %*% percM[ef[i], ]
+Torn50_22.spdf <- Torn50_22.spdf %>%
+  mutate(ED = EW3 * AreaPath) #Units of ______
+``` 
+
+Calculate the NARRtime, NARRday, and NARRZtime for each report. 
+```{r, eval = FALSE}
+Zulu_DateTime <- force_tz(Torn50_22.spdf$DateTime, tzone = "UTC")
+NARRtime_UTC <- align.time(Zulu_DateTime, n = (60 * 60 * 3)) + 3600 *3 ###Had to remove the -3600*3
+NARRday = format(as.POSIXct(strptime(NARRtime_UTC,"%Y-%m-%d %H:%M:%S",tz="")) ,format = "%Y/%m/%d")
+NARRZtime = format(as.POSIXct(strptime(NARRtime_UTC,"%Y-%m-%d %H:%M:%S",tz="")) ,format = "%H")
+
+Torn50_22.spdf <- cbind(Torn50_22.spdf, NARRtime_UTC, NARRday, NARRZtime)
+```
+
+Remove the cDateTime Column
+```{r, eval = FALSE}
+Torn50_22.spdf <- Torn50_22.spdf[, !names(Torn50_22.spdf) %in% c("cDateTime")]
+
+ModernTorns <- Torn50_22.spdf
+```
+
+Set up the data for the  Modern Tornado Record (as tracks): 
+```{r, eval = FALSE}
+ModernTornTracks <- st_drop_geometry(Torn50_22.spdf)
+ModernTornTracks <- cbind(ModernTornTracks, trackgeometry)
+
+ModernTornTracks <- st_as_sf(ModernTornTracks)
+st_crs(ModernTornTracks) <- 4326
+```
+
+```{r, eval = FALSE}
+#save(ModernTorns, ModernTornTracks, file = "ModernTornadoes.RData")
+```
+
+###############################################################################
+
+## Load the Historical Tornado Data: 
+
+This data set includes the **HistTorns** and the **HistTornTracks** data. The **HistTorns** is the point data for the tornado genesis location. The **HistTornTracks** is the line data for the entire track (path) of the tornado.
+
+```{r, eval = FALSE}
+load("HistoricalTornadoes.RData")
+```
+
+## Load the Modern Tornado Data: 
+
+This data set includes the **ModernTorns** and the **ModernTornTracks** data for all recorded tornadoes between 1950 and 2021. The **ModernTorns** is the point data for the tornado genesis location. The **ModernTornTracks** is the line data for the entire track (path) of the tornado.
+
+```{r, eval = FALSE}
+load("ModernTornadoes.RData")
+```
+
+
+## Data Cleaning: 
+
+```{r, eval = FALSE}
+min(HistTorns$yr)
+max(HistTorns$yr)
+
+min(ModernTorns$yr)
+max(ModernTorns$yr)
+```
+```{r, eval = FALSE}
+HistTorns50_89 <-  HistTorns %>%
+  filter(yr >= 1950,
+         yr <= 1989, 
+         time != "NA", 
+         om != 4811) #DateTime calculation resulting in a NA
+
+min(HistTorns50_89$yr)
+max(HistTorns50_89$yr)
+```
+This results in 5,692 tornadoes. 
+
+
+```{r, eval = FALSE}
+ModernTorns50_89 <- ModernTorns %>%
+  filter(yr >= 1950,
+         yr <= 1989, 
+         mag >= 1)
+
+min(ModernTorns50_89$yr)
+max(ModernTorns50_89$yr)
+```
+This results in 19,736 tornadoes.
+
+## Define clusters for Historical Tornadoes:
+
+Determine the distance between tornadoes in space and time. Use a projection, not lat/lon. See https://epsg.io/102004. Extract the coordinates of the start locations as a N by 2 matrix, where N is the number of tornadoes. Also extract the date-time as a vector of class `POSIXct`.
+```{r, eval = FALSE}
+HistTorns50_89 <- st_transform(HistTorns50_89, crs = US_LCC)
+space <- st_coordinates(HistTorns50_89)
+time <- HistTorns50_89$DateTime
+```
+
+Next compute pairwise Euclidean distances in space and, separately, in time using the `dist()` function. Divide the spatial distance by 15 so that the values are commensurate with the time 'distance' based on the assumption of 15 meters per second (~34 mph) for an average speed of tornado-generating storms. Compare: Distance from New York to Denver is 2.622 x 10^6 meters. There are 3.154 x 10^7 seconds in a year. This will capture the historic multiday tornado outbreaks. For analysis we want to consider each day in the multiday group separately. As the value of the divisor increases cluster areas get larger. Remove `ds` and `dt` to free memory. Distances are saved as an object of class `dist` containing a vector of length N * (N-1)/2, which is the number of unique point pairs.
+```{r, eval = FALSE}
+ds <- dist(space) / 15
+dt <- dist(time)
+dst <- ds + dt
+rm(ds, dt)
+```
+
+Distances are saved as an object of class `dist` containing a vector of length N * (N-1)/2, which is the number of unique point pairs.
+
+Next group the tornadoes based on the space-time distances. This is done with the `hclust()` (hierarchical cluster) function. Initially, each tornado is assigned to its own group and then the algorithm joins the two closest tornadoes determined by values in `dst`. The algorithm continues by joining tornadoes (and tornado groups) until there is a single large group.
+
+The single linkage method (`method = "single"`) is related to the minimal spanning tree (MST) and adopts a 'friends of friends' grouping strategy. An edge-weighted graph is a graph where each edge has a weight (or cost). Here weights are space-time distances between tornadoes. A MST of an edge-weighted graph is a spanning tree whose weight (the sum of the weights of its edges) is no larger than the weight of any other spanning tree. A spanning tree of a graph on N vertices (tornado centroids) is a subset of N-1 edges that form a tree (Skiena 1990, p. 227).
+ 
+The `cutree()` function is used to extract a group number for each tornado. Tornadoes in each group are close in space & time. Here the tree is cut at a height of 50000 space-time units. Making `h` smaller results in smaller groups (fewer tornadoes per group).
+```{r, eval = FALSE}
+stime <- proc.time()
+tree <- hclust(dst, method = "single")
+groupNumber <- as.integer(cutree(tree, h = 50000))
+proc.time() - stime
+rm(dst)
+```
+
+Add the group number to each tornado. 
+```{r, eval = FALSE}
+HistTorns50_89$groupNumber <- groupNumber
+```
+
+## Multi-day Outbreaks
+
+Compute group-level statistics. 
+```{r, eval = FALSE}
+HistGroups.sfdfT <- HistTorns50_89 %>%
+  group_by(groupNumber) %>%
+  summarize(Year = first(Year),
+            Month = first(mo),
+            FirstDate = first(date),
+            LastDate = last(date),
+            Name = paste(FirstDate, "to", LastDate),
+            FirstcDate = first(cDate),
+            LastcDate = last(cDate),
+            ncD = n_distinct(cDate),
+            nT = n(),
+            n0 = sum(mag == 0),
+            n1 = sum(mag == 1),
+            n2 = sum(mag == 2),
+            n3 = sum(mag == 3),
+            n4 = sum(mag == 4),
+            n5 = sum(mag == 5),
+            ATP = sum(ED),
+            ATP_TW = paste(round(ATP/10^12), "TW"),
+            maxEF = max(mag),
+            nD = n_distinct(date),
+            StartTime = first(DateTime),
+            EndTime = last(DateTime),
+            Duration = difftime(EndTime, StartTime, units = "secs"), 
+            cas = sum(inj + fat)) 
+```
+ 
+```{r, eval = FALSE}
+HistGroupTornadoes <- HistTorns50_89 %>%
+  filter(groupNumber %in% HistGroups.sfdfT$groupNumber)
+```
+
+## Big Day Outbreaks
+
+Filter individual tornadoes to remove those that are not part of a large group. Group by group number and convective dates. Remove days having fewer than 10 tornadoes.
+
+## Big Days with more than 6 tornadoes. 
+```{r, eval = FALSE}
+HistBigDays.sfdfT <- HistTorns50_89 %>%
+  filter(groupNumber %in% HistGroups.sfdfT$groupNumber) %>%
+  group_by(groupNumber, cDate) %>%
+  summarize(nT = n(),
+            n0 = sum(mag == 0),
+            n1 = sum(mag == 1),
+            n2 = sum(mag == 2),
+            n3 = sum(mag == 3),
+            n4 = sum(mag == 4),
+            n5 = sum(mag == 5),
+            ATP = sum(ED),
+            maxATP = max(ED),
+            avgATP = mean(ED),
+            GroupDayCas = sum(cas),
+            GroupDayFat = sum(fat),
+            StartTime_CST = first(DateTime),
+            EndTime_CST= last(DateTime),
+            StartTime_UTC = StartTime_CST + 21600,
+            EndTime_UTC = EndTime_CST + 21600,
+            Duration = difftime(EndTime_CST, StartTime_CST, units = "secs")) %>%
+  filter(nT >= 6) %>%
+  mutate(Year = year(cDate),
+         Mo = month(cDate),
+         Month = format(cDate, "%m"), # this is needed to preserve the leading zeros
+         Day = format(cDate, "%d"), 
+         ATP_TW = ATP/10^12)                                                                              
+dim(HistBigDays.sfdfT)
+```
+Create a unique ID for each big day and each tornado. Extract the tornadoes associated with each big day using the unique ID.
+```{r, eval = FALSE}
+HistBigDayTornadoes <- HistTorns50_89 %>%
+   mutate(ID = paste0(gsub("-", "", cDate), groupNumber))
+HistBigDays.sfdfT <- HistBigDays.sfdfT %>%
+   mutate(ID = paste0(gsub("-", "", cDate), groupNumber))
+
+HistBigDayTornadoes <- HistBigDayTornadoes %>%
+  filter(ID %in% HistBigDays.sfdfT$ID)
+
+sum(HistBigDays.sfdfT$nT)
+```
+
+Obtain the group day hulls. Transform the CRS to match that of the environmental data raster grids.
+```{r, eval = FALSE}
+HistBigDays.sfdfT <- st_convex_hull(HistBigDays.sfdfT)
+HistBigDays.sfdfT$HullArea <- st_area(HistBigDays.sfdfT)
+HistBigDays.sfdfT <- st_transform(HistBigDays.sfdfT, 
+  crs = US_LCC)
+```
+
+Get the centroid (central point of the tornado activity) for each big day. 
+```{r, eval = FALSE}
+HistBigDayCentroids.df <- st_centroid(HistBigDays.sfdfT)
+HistBigDayCentroids.df$groupArea <- st_area(st_convex_hull(HistBigDays.sfdfT))
+HistBigDayCentroids.df$groupDensity <- HistBigDayCentroids.df$nT/HistBigDayCentroids.df$groupArea
+```
+
+```{r, eval = FALSE}
+#save(HistBigDays.sfdfT, HistBigDayTornadoes, HistBigDayCentroids.df, HistTorns50_89, HistGroups.sfdfT, file = "HistoricalOutbreaks.RData")
+```
+
+
+## Define clusters for Modern Tornadoes:
+
+Determine the distance between tornadoes in space and time. Use a projection, not lat/lon. See https://epsg.io/102004. Extract the coordinates of the start locations as a N by 2 matrix, where N is the number of tornadoes. Also extract the date-time as a vector of class `POSIXct`.
+```{r, eval = FALSE}
+ModernTorns50_89 <- st_transform(ModernTorns50_89, crs = US_LCC)
+space <- st_coordinates(ModernTorns50_89)
+time <- ModernTorns50_89$DateTime
+```
+
+Next compute pairwise Euclidean distances in space and, separately, in time using the `dist()` function. Divide the spatial distance by 15 so that the values are commensurate with the time 'distance' based on the assumption of 15 meters per second (~34 mph) for an average speed of tornado-generating storms. Compare: Distance from New York to Denver is 2.622 x 10^6 meters. There are 3.154 x 10^7 seconds in a year. This will capture the historic multiday tornado outbreaks. For analysis we want to consider each day in the multiday group separately. As the value of the divisor increases cluster areas get larger. Remove `ds` and `dt` to free memory. Distances are saved as an object of class `dist` containing a vector of length N * (N-1)/2, which is the number of unique point pairs.
+```{r, eval = FALSE}
+ds <- dist(space) / 15
+dt <- dist(time)
+dst <- ds + dt
+rm(ds, dt)
+```
+
+Distances are saved as an object of class `dist` containing a vector of length N * (N-1)/2, which is the number of unique point pairs.
+
+Next group the tornadoes based on the space-time distances. This is done with the `hclust()` (hierarchical cluster) function. Initially, each tornado is assigned to its own group and then the algorithm joins the two closest tornadoes determined by values in `dst`. The algorithm continues by joining tornadoes (and tornado groups) until there is a single large group.
+
+The single linkage method (`method = "single"`) is related to the minimal spanning tree (MST) and adopts a 'friends of friends' grouping strategy. An edge-weighted graph is a graph where each edge has a weight (or cost). Here weights are space-time distances between tornadoes. A MST of an edge-weighted graph is a spanning tree whose weight (the sum of the weights of its edges) is no larger than the weight of any other spanning tree. A spanning tree of a graph on N vertices (tornado centroids) is a subset of N-1 edges that form a tree (Skiena 1990, p. 227).
+ 
+The `cutree()` function is used to extract a group number for each tornado. Tornadoes in each group are close in space & time. Here the tree is cut at a height of 50000 space-time units. Making `h` smaller results in smaller groups (fewer tornadoes per group).
+```{r, eval = FALSE}
+stime <- proc.time()
+tree <- hclust(dst, method = "single")
+groupNumber <- as.integer(cutree(tree, h = 50000))
+proc.time() - stime
+rm(dst)
+```
+
+Add the group number to each tornado. 
+```{r, eval = FALSE}
+ModernTorns50_89$groupNumber <- groupNumber
+```
+
+## Multi-day Outbreaks
+
+Compute group-level statistics. 
+```{r, eval = FALSE}
+ModernGroups.sfdfT <- ModernTorns50_89 %>%
+  group_by(groupNumber) %>%
+  summarize(Year = first(Year),
+            Month = first(mo),
+            FirstDate = first(date),
+            LastDate = last(date),
+            Name = paste(FirstDate, "to", LastDate),
+            FirstcDate = first(cDate),
+            LastcDate = last(cDate),
+            ncD = n_distinct(cDate),
+            nT = n(),
+            n0 = sum(mag == 0),
+            n1 = sum(mag == 1),
+            n2 = sum(mag == 2),
+            n3 = sum(mag == 3),
+            n4 = sum(mag == 4),
+            n5 = sum(mag == 5),
+            ATP = sum(ED),
+            ATP_TW = paste(round(ATP/10^12), "TW"),
+            maxEF = max(mag),
+            nD = n_distinct(date),
+            StartTime = first(DateTime),
+            EndTime = last(DateTime),
+            Duration = difftime(EndTime, StartTime, units = "secs"), 
+            cas = sum(inj + fat)) 
+```
+ 
+```{r, eval = FALSE}
+ModernGroupTornadoes <- ModernTorns50_89 %>%
+  filter(groupNumber %in% ModernGroups.sfdfT$groupNumber)
+```
+
+## Big Day Outbreaks
+
+Filter individual tornadoes to remove those that are not part of a large group. Group by group number and convective dates. Remove days having fewer than 10 tornadoes.
+
+## Big Days with more than 6 tornadoes. 
+```{r, eval = FALSE}
+ModernBigDays.sfdfT <- ModernTorns50_89 %>%
+  filter(groupNumber %in% ModernGroups.sfdfT$groupNumber) %>%
+  group_by(groupNumber, cDate) %>%
+  summarize(nT = n(),
+            n0 = sum(mag == 0),
+            n1 = sum(mag == 1),
+            n2 = sum(mag == 2),
+            n3 = sum(mag == 3),
+            n4 = sum(mag == 4),
+            n5 = sum(mag == 5),
+            ATP = sum(ED),
+            maxATP = max(ED),
+            avgATP = mean(ED),
+            GroupDayCas = sum(cas),
+            GroupDayFat = sum(fat),
+            StartTime_CST = first(DateTime),
+            EndTime_CST= last(DateTime),
+            StartTime_UTC = StartTime_CST + 21600,
+            EndTime_UTC = EndTime_CST + 21600,
+            Duration = difftime(EndTime_CST, StartTime_CST, units = "secs")) %>%
+  filter(nT >= 6) %>%
+  mutate(Year = year(cDate),
+         Mo = month(cDate),
+         Month = format(cDate, "%m"), # this is needed to preserve the leading zeros
+         Day = format(cDate, "%d"), 
+         ATP_TW = ATP/10^12)                                                                              
+dim(ModernBigDays.sfdfT)
+```
+Create a unique ID for each big day and each tornado. Extract the tornadoes associated with each big day using the unique ID.
+```{r, eval = FALSE}
+ModernBigDayTornadoes <- ModernTorns50_89 %>%
+   mutate(ID = paste0(gsub("-", "", cDate), groupNumber))
+ModernBigDays.sfdfT <- ModernBigDays.sfdfT %>%
+   mutate(ID = paste0(gsub("-", "", cDate), groupNumber))
+
+ModernBigDayTornadoes <- ModernBigDayTornadoes %>%
+  filter(ID %in% ModernBigDays.sfdfT$ID)
+
+sum(ModernBigDays.sfdfT$nT)
+```
+
+Obtain the group day hulls. Transform the CRS to match that of the environmental data raster grids.
+```{r, eval = FALSE}
+ModernBigDays.sfdfT <- st_convex_hull(ModernBigDays.sfdfT)
+ModernBigDays.sfdfT$HullArea <- st_area(ModernBigDays.sfdfT)
+ModernBigDays.sfdfT <- st_transform(ModernBigDays.sfdfT, 
+  crs = US_LCC)
+```
+
+Get the centroid (central point of the tornado activity) for each big day. 
+```{r, eval = FALSE}
+ModernBigDayCentroids.df <- st_centroid(ModernBigDays.sfdfT)
+ModernBigDayCentroids.df$groupArea <- st_area(st_convex_hull(ModernBigDays.sfdfT))
+ModernBigDayCentroids.df$groupDensity <- ModernBigDayCentroids.df$nT/ModernBigDayCentroids.df$groupArea
+```
+
+```{r, eval = FALSE}
+#save(ModernBigDays.sfdfT, ModernBigDayTornadoes, ModernBigDayCentroids.df, ModernTorns50_89, ModernGroups.sfdfT, file = "ModernOutbreaks.RData")
+```
+
