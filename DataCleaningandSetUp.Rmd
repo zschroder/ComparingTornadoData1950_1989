@@ -258,6 +258,7 @@ max(HistTorns$yr)
 min(ModernTorns$yr)
 max(ModernTorns$yr)
 ```
+
 ```{r, eval = FALSE}
 HistTorns50_89 <-  HistTorns %>%
   filter(yr >= 1950,
@@ -323,6 +324,8 @@ HistTorns50_89$groupNumber <- groupNumber
 
 Compute group-level statistics. 
 ```{r, eval = FALSE}
+HistTorns50_89$mag_num <- as.numeric(substr(HistTorns50_89$mag,2,2))
+
 HistGroups.sfdfT <- HistTorns50_89 %>%
   group_by(groupNumber) %>%
   summarize(Year = first(Year),
@@ -334,15 +337,15 @@ HistGroups.sfdfT <- HistTorns50_89 %>%
             LastcDate = last(cDate),
             ncD = n_distinct(cDate),
             nT = n(),
-            n0 = sum(mag == 0),
-            n1 = sum(mag == 1),
-            n2 = sum(mag == 2),
-            n3 = sum(mag == 3),
-            n4 = sum(mag == 4),
-            n5 = sum(mag == 5),
+            n0 = sum(mag_num == 0),
+            n1 = sum(mag_num == 1),
+            n2 = sum(mag_num == 2),
+            n3 = sum(mag_num == 3),
+            n4 = sum(mag_num == 4),
+            n5 = sum(mag_num == 5),
             ATP = sum(ED),
             ATP_TW = paste(round(ATP/10^12), "TW"),
-            maxEF = max(mag),
+            maxEF = max(mag_num),
             nD = n_distinct(date),
             StartTime = first(DateTime),
             EndTime = last(DateTime),
@@ -365,12 +368,12 @@ HistBigDays.sfdfT <- HistTorns50_89 %>%
   filter(groupNumber %in% HistGroups.sfdfT$groupNumber) %>%
   group_by(groupNumber, cDate) %>%
   summarize(nT = n(),
-            n0 = sum(mag == 0),
-            n1 = sum(mag == 1),
-            n2 = sum(mag == 2),
-            n3 = sum(mag == 3),
-            n4 = sum(mag == 4),
-            n5 = sum(mag == 5),
+            n0 = sum(mag_num == 0),
+            n1 = sum(mag_num == 1),
+            n2 = sum(mag_num == 2),
+            n3 = sum(mag_num == 3),
+            n4 = sum(mag_num == 4),
+            n5 = sum(mag_num == 5),
             ATP = sum(ED),
             maxATP = max(ED),
             avgATP = mean(ED),
@@ -389,6 +392,7 @@ HistBigDays.sfdfT <- HistTorns50_89 %>%
          ATP_TW = ATP/10^12)                                                                              
 dim(HistBigDays.sfdfT)
 ```
+
 Create a unique ID for each big day and each tornado. Extract the tornadoes associated with each big day using the unique ID.
 ```{r, eval = FALSE}
 HistBigDayTornadoes <- HistTorns50_89 %>%
