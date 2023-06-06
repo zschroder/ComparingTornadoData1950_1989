@@ -3,6 +3,8 @@ title: "Comparing Tornado Data 1950-1989"
 author: "Zoe Schroder"
 date: '2023-03-28'
 output: html_document
+editor_options: 
+  chunk_output_type: console
 ---
 
 Projections you may need: 
@@ -29,6 +31,9 @@ suppressMessages(library(lutz))
 suppressMessages(library(xts))
 suppressMessages(library(chron))
 suppressMessages(library(sp))
+suppressMessages(library(ggplot2))
+suppressMessages(library(tmap))
+suppressMessages(library(USAboundaries))
 ```
 
 ## Historical Tornado Outbreak Data
@@ -36,10 +41,10 @@ suppressMessages(library(sp))
 Load the Historical Outbreak data into this session. 
 
 `HistBigDayCentroids`: The convex hull (boundary) of all touchdown locations for each big day. 
-`HistBigDays.sfdfT`: Complete list of any and all convective days with at least 6 tornadoes. A convective day is defined as a 24-hour period between 6 AM and 6 AM. In total, there are 188 historical big days in the data set. 
-`HistBigDayTornadoes`: List of all tornadoes that exist on a Big Day with at least 6 tornadoes. In total, 1881 tornadoes occur on a big day. 
+`HistBigDays.sfdfT`: Complete list of any and all convective days with at least 6 tornadoes. A convective day is defined as a 24-hour period between 6 AM and 6 AM. In total, there are 79 historical big days in the data set. 
+`HistBigDayTornadoes`: List of all tornadoes that exist on a Big Day with at least 6 tornadoes. In total, 754 tornadoes occur on a big day. 
 `HistGroups.sfdfT`: All historical tornadoes grouped into clusters based on space-time distance. The groups range from 1 day to 3 day events.
-`HistTorns50_89`: All historical tornadoes between 1950 and 1989 reported in the Grazulis's Significant Tornadoes 1880 - 1989 book. In total, there are 5,692 tornadoes during this time period. 
+`HistTorns50_89`: All historical tornadoes between 1950 and 1989 reported in the Grazulis's Significant Tornadoes 1880 - 1989 book. In total, there are 3,108 tornadoes during this time period. 
 
 ```{r}
 load("HistoricalOutbreaks.RData")
@@ -51,10 +56,10 @@ load("HistoricalOutbreaks.RData")
 Load the Modern Outbreak data into this session. 
 
 `ModernBigDayCentroids`: The convex hull (boundary) of all touchdown locations for each big day. 
-`ModernBigDays.sfdfT`: Complete list of any and all convective days with at least 6 tornadoes. A convective day is defined as a 24-hour period between 6 AM and 6 AM. In total, there are 759 historical big days in the data set. 
-`ModernBigDayTornadoes`: List of all tornadoes that exist on a Big Day with at least 6 tornadoes. In total, 8531 tornadoes occur on a big day. 
-`ModernGroups.sfdfT`: All modern tornadoes grouped into clusters based on space-time distance. In total there are 7395 groups. The groups range from 1 day to 3 day events.
-`ModernTorns50_89`: All modern tornadoes between 1950 and 1989 reported in the SPC tornado data set. In total, there are 19736 tornadoes during this time period. 
+`ModernBigDays.sfdfT`: Complete list of any and all convective days with at least 6 tornadoes. A convective day is defined as a 24-hour period between 6 AM and 6 AM. In total, there are 108 historical big days in the data set. 
+`ModernBigDayTornadoes`: List of all tornadoes that exist on a Big Day with at least 6 tornadoes. In total, 1,062 tornadoes occur on a big day. 
+`ModernGroups.sfdfT`: All modern tornadoes grouped into clusters based on space-time distance. In total there are 2415 groups. The groups range from 1 day to 3 day events.
+`ModernTorns50_89`: All modern tornadoes between 1950 and 1989 reported in the SPC tornado data set. In total, there are 4,622 tornadoes during this time period. 
 
 ```{r}
 load("ModernOutbreaks.RData")
@@ -72,6 +77,207 @@ HistBigDays.sfdfT %>%
 ModernBigDays.sfdfT %>%
   arrange(-nT) %>%
   head(10)
+```
+There is a 70% match in the top 10 big days between the modern and historical records. The historical record has 3 days which do not fall within the top 10 in the modern record. However, they are found in the top 20 of the modern record. These include: 
+
+May 5, 1960
+April 2, 1956
+December 18, 1957
+
+Get the state data for the lower 48 using the `us_states` function from the **USAboundaries** package. This will allow the state borders to be added to a map using the *tm_shape* function. 
+```{r}
+sts <- state.name[!state.name %in% c("Alaska", "Hawaii")]
+stateBorders <- us_states(states = sts)
+```
+
+Plot the data for the historical big day tornado touchdown locations (`HistBigDayTorns`). Add a map of the United States. 
+```{r}
+HistTornMap <- (tm_shape(stateBorders) +
+  tm_borders(col = "gray70", alpha = 1) +
+  tm_compass(size = 3, fontsize = 1, lwd = 2, color.dark = "gray70") +       
+  tm_scale_bar(width = .3, size = 0.8, lwd = 1.75, color.dark = "gray70") +
+  tm_layout(legend.bg.color = "white", 
+            legend.text.size = .75, 
+            attr.position = c("left", "bottom"), 
+            inner.margins = c(.1, .1, .1, .1)) +
+tm_shape(HistBigDayTornadoes, is.master = TRUE, projection = "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs") +
+  tm_bubbles(size = 0.1, 
+             col = "mag_num", 
+             breaks = seq(0, 5, by=1),
+             labels = c("F1", "F2", "F3", "F4", "F5"), 
+             title.col = "Magnitude") +
+      tm_layout("Historical Tornadoes",legend.title.size = 1.1,
+            legend.position = c("right", "bottom"), 
+            legend.stack = "horizontal",
+            legend.frame = FALSE, 
+            legend.text.size = 1, legend.width = -0.2))
+```
+
+Plot the data for the modern big day tornado touchdown locations (`ModernBigDayTorns`). Add a map of the United States.
+
+```{r}
+ModernTornMap <- (tm_shape(stateBorders) +
+  tm_borders(col = "gray70", alpha = 1) +
+  tm_compass(size = 3, fontsize = 1, lwd = 2, color.dark = "gray70") +       
+  tm_scale_bar(width = .3, size = 0.8, lwd = 1.75, color.dark = "gray70") +
+  tm_layout(legend.bg.color = "white", 
+            legend.text.size = .75, 
+            attr.position = c("left", "bottom"), 
+            inner.margins = c(.1, .1, .1, .1)) +
+tm_shape(ModernBigDayTornadoes, is.master = TRUE, projection = "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs") +
+  tm_bubbles(size = 0.1, 
+             col = "mag", 
+             breaks = seq(0, 5, by=1),
+             labels = c("F1", "F2", "F3", "F4", "F5"), 
+             title.col = "Magnitude") +
+      tm_layout("Modern Tornadoes", legend.title.size = 1.1,
+            legend.position = c("right", "bottom"), 
+            legend.stack = "horizontal",
+            legend.frame = FALSE, 
+            legend.text.size = 1, legend.width = -0.2))
+```
+
+```{r}
+tmap_arrange(HistTornMap, ModernTornMap)
+```
+
+
+From the Historical Data Set:  
+April 3, 1974
+ID: 
+```{r}
+Apr3 <- HistBigDays.sfdfT %>%
+  filter(cDate == "1974-04-03", groupNumber == 84)
+
+Apr3centroid <- HistBigDayCentroids.df %>%
+  filter(cDate == "1974-04-03", groupNumber == 84) %>%
+  as_Spatial()
+
+Apr3tornadoes <- HistBigDayTornadoes %>% 
+  filter(cDate == "1974-04-03", groupNumber == 84)
+
+Apr3tornadoes <- Apr3tornadoes %>%
+  mutate(Hour2 = ifelse(Hour <= 6, Hour + 24, Hour)) %>%
+  as_Spatial
+```
+
+**Make a map of the APRIL 3 1974 tornado day. Obtain the state and county boundaries from the `USAboundaries` package. **
+```{r}
+Apr3tornadoes$Hour2 <- cut(Apr3tornadoes$Hour2, breaks=c(6,12,18,24,30))
+
+HistApr31974 <- (tm_shape(stateBorders) +
+               tm_text("state_name") +
+  tm_borders(col = "gray70", alpha = 1) +
+  tm_compass(size = 3, fontsize = 1, lwd = 2, color.dark = "gray70") +       
+  tm_scale_bar(width = .3, size = 0.8, lwd = 1.75, color.dark = "gray70") +
+  tm_layout(legend.bg.color = "white", 
+            legend.text.size = .75, 
+            attr.position = c("left", "bottom"), 
+            inner.margins = c(.15, .15, .15, .15)) +
+#tm_shape(counties.sf) +
+#  tm_borders(col = "gray40", alpha = .3) +
+#  tm_scale_bar(width = 8, size = 8, color.dark = "gray70") +
+  #tm_format("World", legend.position = c("right", "top"),
+#                   attr.position = c("right", "top"),
+#                   legend.frame = FALSE,
+                   #title = "May 30th Tornado Group",
+                   #title.size = 1.3,
+                   #title.position = c("left", "TOP"),
+ #                  inner.margins = c(.2, .2, .2, .2)) +
+tm_shape(Apr3, is.master = TRUE, projection = "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs") +
+  tm_borders(col = "black", lwd = 3) +
+tm_shape(Apr3tornadoes) +
+  tm_symbols(size = 4, col = "Hour2", alpha = 0.8, palette = "BuPu", title.col = "Time [CST]", labels = c("6 to 12", "12 to 18", "18 to 24", "0 to 6"), border.alpha = 0) +
+    tm_layout(legend.title.size = 1.1,
+            legend.position = c("right", "bottom"), 
+            legend.stack = "horizontal",
+            legend.frame = FALSE, 
+            legend.text.size = 1, legend.width = -0.2) +
+tm_shape(Apr3centroid, projection = "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs") +
+  tm_symbols(size = 1.25, col = "black", shape = 24)  +
+  tm_layout(main.title = "Historical Data", title = "April 3, 1974 \n 74 tornadoes", 
+              title.position = c("center", "top"), 
+              legend.title.size = 1.4,
+              legend.position = c("right", "bottom"), 
+              legend.stack = "horizontal",
+              legend.frame = FALSE, 
+              legend.text.size = 1.2, 
+              legend.width = -0.2, 
+              title.size = 1.5)
+)
+
+HistApr31974
+```
+
+From the Modern Data Set: 
+April 3, 1974
+ID: 
+```{r}
+Apr3 <- ModernBigDays.sfdfT %>%
+  filter(cDate == "1974-04-03", groupNumber == 1477)
+
+Apr3centroid <- ModernBigDayCentroids.df %>%
+  filter(cDate == "1974-04-03", groupNumber == 1477) %>%
+  as_Spatial()
+
+Apr3tornadoes <- ModernBigDayTornadoes %>% 
+  filter(cDate == "1974-04-03", groupNumber == 1477)
+
+Apr3tornadoes <- Apr3tornadoes %>%
+  mutate(Hour2 = ifelse(Hour <= 6, Hour + 24, Hour)) %>%
+  as_Spatial
+```
+
+**Make a map of the APRIL 3 1974 tornado day. Obtain the state and county boundaries from the `USAboundaries` package. **
+```{r}
+Apr3tornadoes$Hour2 <- cut(Apr3tornadoes$Hour2, breaks=c(6,12,18,24,30))
+
+ModApr31974 <- (tm_shape(stateBorders) +
+               tm_text("state_name") +
+  tm_borders(col = "gray70", alpha = 1) +
+  tm_compass(size = 3, fontsize = 1, lwd = 2, color.dark = "gray70") +       
+  tm_scale_bar(width = .3, size = 0.8, lwd = 1.75, color.dark = "gray70") +
+  tm_layout(legend.bg.color = "white", 
+            legend.text.size = .75, 
+            attr.position = c("left", "bottom"), 
+            inner.margins = c(.15, .15, .15, .15)) +
+#tm_shape(counties.sf) +
+#  tm_borders(col = "gray40", alpha = .3) +
+#  tm_scale_bar(width = 8, size = 8, color.dark = "gray70") +
+  #tm_format("World", legend.position = c("right", "top"),
+#                   attr.position = c("right", "top"),
+#                   legend.frame = FALSE,
+                   #title = "May 30th Tornado Group",
+                   #title.size = 1.3,
+                   #title.position = c("left", "TOP"),
+ #                  inner.margins = c(.2, .2, .2, .2)) +
+tm_shape(Apr3, is.master = TRUE, projection = "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs") +
+  tm_borders(col = "black", lwd = 3) +
+tm_shape(Apr3tornadoes) +
+  tm_symbols(size = 4, col = "Hour2", alpha = 0.8, palette = "BuPu", title.col = "Time [CST]", labels = c("6 to 12", "12 to 18", "18 to 24", "0 to 6"), border.alpha = 0) +
+    tm_layout(legend.title.size = 1.1,
+            legend.position = c("right", "bottom"), 
+            legend.stack = "horizontal",
+            legend.frame = FALSE, 
+            legend.text.size = 1, legend.width = -0.2) +
+tm_shape(Apr3centroid, projection = "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs") +
+  tm_symbols(size = 1.25, col = "black", shape = 24)  +
+  tm_layout(main.title = "Modern Data", title = "April 3, 1974 \n 84 tornadoes", 
+              title.position = c("center", "top"), 
+              legend.title.size = 1.4,
+              legend.position = c("right", "bottom"), 
+              legend.stack = "horizontal",
+              legend.frame = FALSE, 
+              legend.text.size = 1.2, 
+              legend.width = -0.2, 
+              title.size = 1.5)
+)
+
+ModApr31974
+```
+
+```{r}
+tmap_arrange(HistApr31974, ModApr31974)
 ```
 
 
