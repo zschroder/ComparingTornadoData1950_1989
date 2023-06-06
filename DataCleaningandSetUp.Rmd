@@ -262,26 +262,28 @@ max(ModernTorns$yr)
 ```{r, eval = FALSE}
 HistTorns50_89 <-  HistTorns %>%
   filter(yr >= 1950,
-         yr <= 1989, 
+         yr <= 1989,
+         fat != 0 | inj != 0, 
          time != "NA", 
          om != 4811) #DateTime calculation resulting in a NA
 
 min(HistTorns50_89$yr)
 max(HistTorns50_89$yr)
 ```
-This results in 5,692 tornadoes. 
+This results in 3,108 tornadoes. 
 
 
 ```{r, eval = FALSE}
 ModernTorns50_89 <- ModernTorns %>%
   filter(yr >= 1950,
-         yr <= 1989, 
+         yr <= 1989,
+         fat != 0 | inj != 0, 
          mag >= 1)
 
 min(ModernTorns50_89$yr)
 max(ModernTorns50_89$yr)
 ```
-This results in 19,736 tornadoes.
+This results in 4,622 tornadoes.
 
 ## Define clusters for Historical Tornadoes:
 
