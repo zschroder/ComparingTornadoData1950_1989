@@ -33,6 +33,9 @@ suppressMessages(library(chron))
 suppressMessages(library(sp))
 suppressMessages(library(ggplot2))
 suppressMessages(library(tmap))
+
+#remotes::install_github("ropensci/USAboundaries")
+#remotes::install_github("ropensci/USAboundariesData")
 suppressMessages(library(USAboundaries))
 ```
 
@@ -78,11 +81,12 @@ ModernBigDays.sfdfT %>%
   arrange(-nT) %>%
   head(10)
 ```
-There is a 70% match in the top 10 big days between the modern and historical records. The historical record has 3 days which do not fall within the top 10 in the modern record. However, they are found in the top 20 of the modern record. These include: 
+There is a 60% match in the top 10 big days between the modern and historical records. The historical record has 4 days which do not fall within the top 10 in the modern record. However, they are found in the top 20 of the modern record. These include: 
 
-May 5, 1960
-April 2, 1956
-December 18, 1957
+May 31, 1985
+April 30, 1954
+March 29, 1984
+April 3, 1956
 
 Get the state data for the lower 48 using the `us_states` function from the **USAboundaries** package. This will allow the state borders to be added to a map using the *tm_shape* function. 
 ```{r}
@@ -147,14 +151,14 @@ April 3, 1974
 ID: 
 ```{r}
 Apr3 <- HistBigDays.sfdfT %>%
-  filter(cDate == "1974-04-03", groupNumber == 84)
+  filter(cDate == "1974-04-03", groupNumber == 130)
 
 Apr3centroid <- HistBigDayCentroids.df %>%
-  filter(cDate == "1974-04-03", groupNumber == 84) %>%
+  filter(cDate == "1974-04-03", groupNumber == 130) %>%
   as_Spatial()
 
 Apr3tornadoes <- HistBigDayTornadoes %>% 
-  filter(cDate == "1974-04-03", groupNumber == 84)
+  filter(cDate == "1974-04-03", groupNumber == 130)
 
 Apr3tornadoes <- Apr3tornadoes %>%
   mutate(Hour2 = ifelse(Hour <= 6, Hour + 24, Hour)) %>%
@@ -163,7 +167,7 @@ Apr3tornadoes <- Apr3tornadoes %>%
 
 **Make a map of the APRIL 3 1974 tornado day. Obtain the state and county boundaries from the `USAboundaries` package. **
 ```{r}
-Apr3tornadoes$Hour2 <- cut(Apr3tornadoes$Hour2, breaks=c(6,12,18,24,30))
+Apr3tornadoes$Hour2 <- cut(as.numeric(Apr3tornadoes$Hour2), breaks=c(6,12,18,24,30))
 
 HistApr31974 <- (tm_shape(stateBorders) +
                tm_text("state_name") +
@@ -195,7 +199,7 @@ tm_shape(Apr3tornadoes) +
             legend.text.size = 1, legend.width = -0.2) +
 tm_shape(Apr3centroid, projection = "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs") +
   tm_symbols(size = 1.25, col = "black", shape = 24)  +
-  tm_layout(main.title = "Historical Data", title = "April 3, 1974 \n 74 tornadoes", 
+  tm_layout(main.title = "Historical Data", title = "April 3, 1974 \n 93 tornadoes", 
               title.position = c("center", "top"), 
               legend.title.size = 1.4,
               legend.position = c("right", "bottom"), 
@@ -214,14 +218,14 @@ April 3, 1974
 ID: 
 ```{r}
 Apr3 <- ModernBigDays.sfdfT %>%
-  filter(cDate == "1974-04-03", groupNumber == 1477)
+  filter(cDate == "1974-04-03", groupNumber == 2519)
 
 Apr3centroid <- ModernBigDayCentroids.df %>%
-  filter(cDate == "1974-04-03", groupNumber == 1477) %>%
+  filter(cDate == "1974-04-03", groupNumber == 2519) %>%
   as_Spatial()
 
 Apr3tornadoes <- ModernBigDayTornadoes %>% 
-  filter(cDate == "1974-04-03", groupNumber == 1477)
+  filter(cDate == "1974-04-03", groupNumber == 2519)
 
 Apr3tornadoes <- Apr3tornadoes %>%
   mutate(Hour2 = ifelse(Hour <= 6, Hour + 24, Hour)) %>%
@@ -280,4 +284,52 @@ ModApr31974
 tmap_arrange(HistApr31974, ModApr31974)
 ```
 
+```{r}
+ HistBigDayTornadoes %>%
+  group_by(mag) %>%
+  summarize(test = n())
+
+ ModernBigDayTornadoes %>%
+  group_by(mag) %>%
+  summarize(test = n())
+```
+Magnitude & Historical Tornadoes & Modernn Tornadoes \\
+F2 & 1199 & 1890 \\
+F3 & 550 & 688 \\
+F4 & 217 & 228 \\
+F5 & 24 & 31 \\
+
+By Decade
+```{r}
+HistBigDays.sfdfT <- HistBigDays.sfdfT %>% 
+  mutate(decade = floor(Year/10)*10) 
+ModernBigDays.sfdfT <- ModernBigDays.sfdfT %>% 
+  mutate(decade = floor(Year/10)*10) 
+
+tester <- HistBigDays.sfdfT %>%
+  group_by(decade) %>%
+  summarize(tottorn = sum(nT),
+            tornado = tottorn) %>%
+  mutate(label = "Historical Tornadoes")
+
+tester2 <- ModernBigDays.sfdfT %>%
+  group_by(decade) %>%
+  summarize(tottorn = sum(nT)) %>%
+  mutate(label = "Modern Tornadoes",
+         tornado = tottorn - tester$tornado)
+
+data <- rbind(tester,tester2)
+
+```
+
+```{r}
+ggplot(data, aes(x = decade, y = tornado, fill = forcats::fct_rev(label))) + 
+  geom_bar(stat = "identity", position = "stack") +
+  theme_bw() +
+  xlab("Decade") +
+  ylab("Number of Tornadoes") +
+  scale_fill_manual(values=c( "red", "blue")) +
+  theme(legend.position="bottom", legend.title=element_blank(), axis.text = element_text(size = 14), axis.title = element_text(size = 16), legend.text = element_text(size = 16)) +
+  scale_y_continuous(expand = c(0, 0), name="Number of Tornadoes", limits=c(0, 900), breaks = seq(0, 900, 100))
+```
 
