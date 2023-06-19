@@ -38,6 +38,11 @@ suppressMessages(library(tmap))
 #remotes::install_github("ropensci/USAboundariesData")
 suppressMessages(library(USAboundaries))
 suppressMessages(library(USAboundariesData))
+
+library(ggspatial)
+library(sfhotspot)
+library(tidyverse)
+library(gridExtra)
 ```
 
 ## Historical Tornado Outbreak Data
@@ -133,6 +138,8 @@ tm_shape(ModTornadoes, is.master = TRUE, projection = "+proj=merc +lon_0=0 +k=1 
 ```{r}
 tmap_arrange(HistTornMap, ModernTornMap)
 ```
+`Fig_HistModTorns`
+
 
 ```{r}
  HistTornadoes %>%
@@ -143,6 +150,7 @@ tmap_arrange(HistTornMap, ModernTornMap)
   group_by(mag) %>%
   summarize(test = n())
 ```
+`Tab_TornMag`
 Magnitude & Historical Tornadoes & Modernn Tornadoes \\
 F2 & 4287 & 6306 \\
 F3 & 993 & 1636 \\
@@ -182,9 +190,110 @@ ggplot(data, aes(x = decade, y = tornado, fill = forcats::fct_rev(label))) +
   theme(legend.position="bottom", legend.title=element_blank(), axis.text = element_text(size = 14), axis.title = element_text(size = 16), legend.text = element_text(size = 16)) +
   scale_y_continuous(expand = c(0, 0), name="Number of Tornadoes", limits=c(0, 2600), breaks = seq(0, 2600, 250))
 ```
+`Fig_TornCounts`
 
+```{r}
+histbyyear <- HistTornadoes  %>%
+  group_by(yr) %>%
+  summarize(hisT = n())
 
+modbyyear <- ModTornadoes %>%
+  group_by(yr) %>%
+  summarize(modT = n())
 
+test <- merge(as.data.frame(histbyyear), as.data.frame(modbyyear), by = "yr")
+
+missingtorns <- test %>%
+  mutate(missingtorn = modT-hisT)
+```
+
+```{r}
+ggplot(missingtorns, aes(x = yr, y = missingtorn)) + 
+  geom_bar(stat = "identity", position = "stack") +
+  theme_bw() +
+  theme(legend.position="bottom", legend.title=element_blank(), axis.text = element_text(size = 14), axis.title = element_text(size = 16), legend.text = element_text(size = 16)) +
+  scale_y_continuous(expand = c(0, 0), name="Unreported Tornadoes in Historical Record", limits=c(-25, 180), breaks = seq(-25, 175, 25)) +
+  scale_x_continuous(expand = c(0, 0), name="Year", limits=c(1949, 1991), breaks = seq(1950, 1991, 5))
+```
+`Fig_MissingTorns`
+
+KDE of Historical Tornadoes
+```{r}
+torn_density_clip <- HistTornadoes |>
+  hotspot_kde(cell_size = 25000, 
+              bandwidth_adjust = 0.5) |>
+  st_transform(WGS84) |>
+  st_intersection(stateBorders)
+```
+
+```{r}
+histkde <- (ggplot() + 
+  #annotation_map_tile(type = "cartolight", zoomin = 0) +
+  geom_sf(aes(fill = kde), 
+          data = torn_density_clip, 
+          alpha = 0.75,
+          colour = NA) +
+  geom_sf(data = stateBorders, color = "gray70", fill = NA) +
+  geom_sf_label(aes(label = str_wrap(stusps, width = 10)), 
+                data = stateBorders, 
+                alpha = 0,
+                colour = "gray20", 
+                lineheight = 1, 
+                size = 2.5, 
+                label.size = NA) +
+  annotation_scale(style = "ticks", location = "bl") +
+  labs(title = "Historical Tornadoes in the United States",
+        subtitle = "1950 - 1989", 
+       fill = "Kernel Density \nof Tornadoes") +
+  scale_fill_distiller(palette = "PuBu", 
+                       direction = 1,
+                       breaks = range(pull(torn_density_clip, "kde")),
+                       labels = c("lower", "higher")) + 
+  theme_void() +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(size = rel(0.8), hjust = 0.5)))
+```
+KDE of Modern Tornadoes
+```{r}
+torn_density_clip <- ModTornadoes |>
+  hotspot_kde(cell_size = 25000, 
+              bandwidth_adjust = 0.5) |>
+    st_transform(WGS84) |>
+  st_intersection(stateBorders)
+```
+
+```{r}
+modkde <- (ggplot() + 
+  #annotation_map_tile(type = "cartolight", zoomin = 0) +
+  geom_sf(aes(fill = kde), 
+          data = torn_density_clip, 
+          alpha = 0.75,
+          colour = NA) +
+  geom_sf(data = stateBorders, color = "gray70", fill = NA) +
+  geom_sf_label(aes(label = str_wrap(stusps, width = 10)), 
+                data = stateBorders, 
+                alpha = 0,
+                colour = "gray20", 
+                lineheight = 1, 
+                size = 2.5, 
+                label.size = NA) +
+  annotation_scale(style = "ticks", location = "bl") +
+  labs(title = "Modern Tornadoes in the United States",
+        subtitle = "1950 - 1989", 
+       fill = "Kernel Density \nof Tornadoes") +
+  scale_fill_distiller(palette = "PuBu", 
+                       direction = 1,
+                       breaks = range(pull(torn_density_clip, "kde")),
+                       labels = c("lower", "higher")) + 
+  theme_void() +
+  theme(plot.title = element_text(hjust = 0.5),
+        plot.subtitle = element_text(size = rel(0.8), hjust = 0.5)))
+```
+
+```{r}
+grid.arrange(histkde, modkde)
+```
+`Fig_TornKDE`
 
 
 ## Data Analysis: Outbreaks
@@ -199,14 +308,14 @@ ModernBigDays.sfdfT %>%
   arrange(-nT) %>%
   head(10)
 ```
+`Tab_Top10Outbreaks`
+
 There is a 60% match in the top 10 big days between the modern and historical records. The historical record has 4 days which do not fall within the top 10 in the modern record. However, they are found in the top 20 of the modern record. These include: 
 
 May 31, 1985
 April 30, 1954
 March 28, 1984
 April 3, 1956
-
-
 
 From the Historical Data Set:  
 April 3, 1974
@@ -345,6 +454,6 @@ ModApr31974
 ```{r}
 tmap_arrange(HistApr31974, ModApr31974)
 ```
-
+`Fig_April31974`
 
 
