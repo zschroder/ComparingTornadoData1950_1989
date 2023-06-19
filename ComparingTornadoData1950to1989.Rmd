@@ -37,6 +37,7 @@ suppressMessages(library(tmap))
 #remotes::install_github("ropensci/USAboundaries")
 #remotes::install_github("ropensci/USAboundariesData")
 suppressMessages(library(USAboundaries))
+suppressMessages(library(USAboundariesData))
 ```
 
 ## Historical Tornado Outbreak Data
@@ -68,8 +69,125 @@ Load the Modern Outbreak data into this session.
 load("ModernOutbreaks.RData")
 ```
 
-## Data Analysis: 
+## Data Analysis: Tornadoes
 
+Get the state data for the lower 48 using the `us_states` function from the **USAboundaries** package. This will allow the state borders to be added to a map using the *tm_shape* function. 
+```{r}
+sts <- state.name[!state.name %in% c("Alaska", "Hawaii")]
+stateBorders <- us_states(states = sts)
+```
+
+Plot the data for the historical big day tornado touchdown locations (`HistBigDayTorns`). Add a map of the United States. 
+```{r}
+HistTornadoes <- HistTorns50_89 %>%
+  filter(mag != "FT", 
+         mag !="FN")
+
+HistTornMap <- (tm_shape(stateBorders) +
+  tm_borders(col = "gray70", alpha = 1) +
+  tm_compass(size = 3, fontsize = 1, lwd = 2, color.dark = "gray70") +       
+  tm_scale_bar(width = .3, size = 0.8, lwd = 1.75, color.dark = "gray70") +
+  tm_layout(legend.bg.color = "white", 
+            legend.text.size = .75, 
+            attr.position = c("left", "bottom"), 
+            inner.margins = c(.05, .05, .05, .05)) +
+tm_shape(HistTornadoes, is.master = TRUE, projection = "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs") +
+  tm_bubbles(size = 0.1, 
+             col = "mag_num", 
+             breaks = seq(0, 5, by=1),
+             labels = c("F1", "F2", "F3", "F4", "F5"), 
+             title.col = "Magnitude") +
+      tm_layout("Historical Tornadoes (Total: 5,692)",legend.title.size = 1.1,
+            legend.position = c("right", "bottom"), 
+            legend.stack = "horizontal",
+            legend.frame = FALSE, 
+            legend.text.size = 1, legend.width = -0.2))
+```
+
+Plot the data for the modern big day tornado touchdown locations (`ModernBigDayTorns`). Add a map of the United States.
+
+```{r}
+ModTornadoes <- ModernTorns50_89
+
+ModernTornMap <- (tm_shape(stateBorders) +
+  tm_borders(col = "gray70", alpha = 1) +
+  tm_compass(size = 3, fontsize = 1, lwd = 2, color.dark = "gray70") +       
+  tm_scale_bar(width = .3, size = 0.8, lwd = 1.75, color.dark = "gray70") +
+  tm_layout(legend.bg.color = "white", 
+            legend.text.size = .75, 
+            attr.position = c("left", "bottom"), 
+            inner.margins = c(.05, .05, .05, .05)) +
+tm_shape(ModTornadoes, is.master = TRUE, projection = "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs") +
+  tm_bubbles(size = 0.1, 
+             col = "mag", 
+             breaks = seq(0, 5, by=1),
+             labels = c("F1", "F2", "F3", "F4", "F5"), 
+             title.col = "Magnitude") +
+      tm_layout("Modern Tornadoes (Total: 8,367)", legend.title.size = 1.1,
+            legend.position = c("right", "bottom"), 
+            legend.stack = "horizontal",
+            legend.frame = FALSE, 
+            legend.text.size = 1, legend.width = -0.2))
+```
+
+```{r}
+tmap_arrange(HistTornMap, ModernTornMap)
+```
+
+```{r}
+ HistTornadoes %>%
+  group_by(mag) %>%
+  summarize(test = n())
+
+ ModTornadoes %>%
+  group_by(mag) %>%
+  summarize(test = n())
+```
+Magnitude & Historical Tornadoes & Modernn Tornadoes \\
+F2 & 4287 & 6306 \\
+F3 & 993 & 1636 \\
+F4 & 375 & 385 \\
+F5 & 33 & 40 \\
+
+By Decade
+```{r}
+HistTornadoes <- HistTornadoes %>% 
+  mutate(decade = floor(Year/10)*10) 
+ModTornadoes <- ModTornadoes %>% 
+  mutate(decade = floor(Year/10)*10) 
+
+tester <- HistTornadoes %>%
+  group_by(decade) %>%
+  summarize(tottorn = n(),
+            tornado = tottorn) %>%
+  mutate(label = "Historical Tornadoes")
+
+tester2 <- ModTornadoes %>%
+  group_by(decade) %>%
+  summarize(tottorn = n()) %>%
+  mutate(label = "Modern Tornadoes",
+         tornado = tottorn - tester$tornado)
+
+data <- rbind(tester,tester2)
+
+```
+
+```{r}
+ggplot(data, aes(x = decade, y = tornado, fill = forcats::fct_rev(label))) + 
+  geom_bar(stat = "identity", position = "stack") +
+  theme_bw() +
+  xlab("Decade") +
+  ylab("Number of Tornadoes") +
+  scale_fill_manual(values=c( "red", "blue")) +
+  theme(legend.position="bottom", legend.title=element_blank(), axis.text = element_text(size = 14), axis.title = element_text(size = 16), legend.text = element_text(size = 16)) +
+  scale_y_continuous(expand = c(0, 0), name="Number of Tornadoes", limits=c(0, 2600), breaks = seq(0, 2600, 250))
+```
+
+
+
+
+
+## Data Analysis: Outbreaks
 ```{r}
 HistBigDays.sfdfT %>%
   arrange(-nT) %>%
@@ -85,65 +203,9 @@ There is a 60% match in the top 10 big days between the modern and historical re
 
 May 31, 1985
 April 30, 1954
-March 29, 1984
+March 28, 1984
 April 3, 1956
 
-Get the state data for the lower 48 using the `us_states` function from the **USAboundaries** package. This will allow the state borders to be added to a map using the *tm_shape* function. 
-```{r}
-sts <- state.name[!state.name %in% c("Alaska", "Hawaii")]
-stateBorders <- us_states(states = sts)
-```
-
-Plot the data for the historical big day tornado touchdown locations (`HistBigDayTorns`). Add a map of the United States. 
-```{r}
-HistTornMap <- (tm_shape(stateBorders) +
-  tm_borders(col = "gray70", alpha = 1) +
-  tm_compass(size = 3, fontsize = 1, lwd = 2, color.dark = "gray70") +       
-  tm_scale_bar(width = .3, size = 0.8, lwd = 1.75, color.dark = "gray70") +
-  tm_layout(legend.bg.color = "white", 
-            legend.text.size = .75, 
-            attr.position = c("left", "bottom"), 
-            inner.margins = c(.1, .1, .1, .1)) +
-tm_shape(HistBigDayTornadoes, is.master = TRUE, projection = "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs") +
-  tm_bubbles(size = 0.1, 
-             col = "mag_num", 
-             breaks = seq(0, 5, by=1),
-             labels = c("F1", "F2", "F3", "F4", "F5"), 
-             title.col = "Magnitude") +
-      tm_layout("Historical Tornadoes",legend.title.size = 1.1,
-            legend.position = c("right", "bottom"), 
-            legend.stack = "horizontal",
-            legend.frame = FALSE, 
-            legend.text.size = 1, legend.width = -0.2))
-```
-
-Plot the data for the modern big day tornado touchdown locations (`ModernBigDayTorns`). Add a map of the United States.
-
-```{r}
-ModernTornMap <- (tm_shape(stateBorders) +
-  tm_borders(col = "gray70", alpha = 1) +
-  tm_compass(size = 3, fontsize = 1, lwd = 2, color.dark = "gray70") +       
-  tm_scale_bar(width = .3, size = 0.8, lwd = 1.75, color.dark = "gray70") +
-  tm_layout(legend.bg.color = "white", 
-            legend.text.size = .75, 
-            attr.position = c("left", "bottom"), 
-            inner.margins = c(.1, .1, .1, .1)) +
-tm_shape(ModernBigDayTornadoes, is.master = TRUE, projection = "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs") +
-  tm_bubbles(size = 0.1, 
-             col = "mag", 
-             breaks = seq(0, 5, by=1),
-             labels = c("F1", "F2", "F3", "F4", "F5"), 
-             title.col = "Magnitude") +
-      tm_layout("Modern Tornadoes", legend.title.size = 1.1,
-            legend.position = c("right", "bottom"), 
-            legend.stack = "horizontal",
-            legend.frame = FALSE, 
-            legend.text.size = 1, legend.width = -0.2))
-```
-
-```{r}
-tmap_arrange(HistTornMap, ModernTornMap)
-```
 
 
 From the Historical Data Set:  
@@ -266,7 +328,7 @@ tm_shape(Apr3tornadoes) +
             legend.text.size = 1, legend.width = -0.2) +
 tm_shape(Apr3centroid, projection = "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs") +
   tm_symbols(size = 1.25, col = "black", shape = 24)  +
-  tm_layout(main.title = "Modern Data", title = "April 3, 1974 \n 84 tornadoes", 
+  tm_layout(main.title = "Modern Data", title = "April 3, 1974 \n 96 tornadoes", 
               title.position = c("center", "top"), 
               legend.title.size = 1.4,
               legend.position = c("right", "bottom"), 
@@ -284,52 +346,5 @@ ModApr31974
 tmap_arrange(HistApr31974, ModApr31974)
 ```
 
-```{r}
- HistBigDayTornadoes %>%
-  group_by(mag) %>%
-  summarize(test = n())
 
- ModernBigDayTornadoes %>%
-  group_by(mag) %>%
-  summarize(test = n())
-```
-Magnitude & Historical Tornadoes & Modernn Tornadoes \\
-F2 & 1199 & 1890 \\
-F3 & 550 & 688 \\
-F4 & 217 & 228 \\
-F5 & 24 & 31 \\
-
-By Decade
-```{r}
-HistBigDays.sfdfT <- HistBigDays.sfdfT %>% 
-  mutate(decade = floor(Year/10)*10) 
-ModernBigDays.sfdfT <- ModernBigDays.sfdfT %>% 
-  mutate(decade = floor(Year/10)*10) 
-
-tester <- HistBigDays.sfdfT %>%
-  group_by(decade) %>%
-  summarize(tottorn = sum(nT),
-            tornado = tottorn) %>%
-  mutate(label = "Historical Tornadoes")
-
-tester2 <- ModernBigDays.sfdfT %>%
-  group_by(decade) %>%
-  summarize(tottorn = sum(nT)) %>%
-  mutate(label = "Modern Tornadoes",
-         tornado = tottorn - tester$tornado)
-
-data <- rbind(tester,tester2)
-
-```
-
-```{r}
-ggplot(data, aes(x = decade, y = tornado, fill = forcats::fct_rev(label))) + 
-  geom_bar(stat = "identity", position = "stack") +
-  theme_bw() +
-  xlab("Decade") +
-  ylab("Number of Tornadoes") +
-  scale_fill_manual(values=c( "red", "blue")) +
-  theme(legend.position="bottom", legend.title=element_blank(), axis.text = element_text(size = 14), axis.title = element_text(size = 16), legend.text = element_text(size = 16)) +
-  scale_y_continuous(expand = c(0, 0), name="Number of Tornadoes", limits=c(0, 900), breaks = seq(0, 900, 100))
-```
 
