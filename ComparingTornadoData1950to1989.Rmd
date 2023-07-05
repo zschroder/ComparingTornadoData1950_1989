@@ -317,6 +317,20 @@ April 30, 1954
 March 28, 1984
 April 3, 1956
 
+```{r}
+HistBigDays.sfdfT %>%
+  group_by(nT) %>%
+  summarize(numClus = n(), 
+            totCas = sum(GroupDayCas))
+
+ModernBigDays.sfdfT %>%
+  group_by(nT) %>%
+  summarize(numClus = n(), 
+            totCas = sum(GroupDayCas))
+```
+
+
+
 From the Historical Data Set:  
 April 3, 1974
 ID: 
