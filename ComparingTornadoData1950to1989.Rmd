@@ -4,7 +4,7 @@ author: "Zoe Schroder"
 date: '2023-03-28'
 output: html_document
 editor_options: 
-  chunk_output_type: console
+  chunk_output_type: inline
 ---
 
 Projections you may need: 
@@ -212,13 +212,13 @@ ggplot(missingtorns, aes(x = yr, y = missingtorn)) +
   geom_bar(stat = "identity", position = "stack") +
   theme_bw() +
   theme(legend.position="bottom", legend.title=element_blank(), axis.text = element_text(size = 14), axis.title = element_text(size = 16), legend.text = element_text(size = 16)) +
-  scale_y_continuous(expand = c(0, 0), name="Unreported Tornadoes in Historical Record", limits=c(-25, 180), breaks = seq(-25, 175, 25)) +
+  scale_y_continuous(expand = c(0, 0), name="Number of Tornadoes", limits=c(-25, 180), breaks = seq(-25, 175, 25)) +
   scale_x_continuous(expand = c(0, 0), name="Year", limits=c(1949, 1991), breaks = seq(1950, 1991, 5))
 ```
 `Fig_MissingTorns`
 
 KDE of Historical Tornadoes
-```{r}
+```{r, eval = FALSE}
 torn_density_clip <- HistTornadoes |>
   hotspot_kde(cell_size = 25000, 
               bandwidth_adjust = 0.5) |>
@@ -226,7 +226,7 @@ torn_density_clip <- HistTornadoes |>
   st_intersection(stateBorders)
 ```
 
-```{r}
+```{r, eval = FALSE}
 histkde <- (ggplot() + 
   #annotation_map_tile(type = "cartolight", zoomin = 0) +
   geom_sf(aes(fill = kde), 
@@ -254,7 +254,7 @@ histkde <- (ggplot() +
         plot.subtitle = element_text(size = rel(0.8), hjust = 0.5)))
 ```
 KDE of Modern Tornadoes
-```{r}
+```{r, eval = FALSE}
 torn_density_clip <- ModTornadoes |>
   hotspot_kde(cell_size = 25000, 
               bandwidth_adjust = 0.5) |>
@@ -262,7 +262,7 @@ torn_density_clip <- ModTornadoes |>
   st_intersection(stateBorders)
 ```
 
-```{r}
+```{r, eval = FALSE}
 modkde <- (ggplot() + 
   #annotation_map_tile(type = "cartolight", zoomin = 0) +
   geom_sf(aes(fill = kde), 
@@ -290,11 +290,10 @@ modkde <- (ggplot() +
         plot.subtitle = element_text(size = rel(0.8), hjust = 0.5)))
 ```
 
-```{r}
+```{r, eval = FALSE}
 grid.arrange(histkde, modkde)
 ```
 `Fig_TornKDE`
-
 
 ## Data Analysis: Outbreaks
 ```{r}
@@ -328,8 +327,6 @@ ModernBigDays.sfdfT %>%
   summarize(numClus = n(), 
             totCas = sum(GroupDayCas))
 ```
-
-
 
 From the Historical Data Set:  
 April 3, 1974
