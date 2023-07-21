@@ -4,7 +4,7 @@ author: "Zoe Schroder"
 date: '2023-03-28'
 output: html_document
 editor_options: 
-  chunk_output_type: inline
+  chunk_output_type: console
 ---
 
 Projections you may need: 
@@ -253,6 +253,7 @@ histkde <- (ggplot() +
   theme(plot.title = element_text(hjust = 0.5),
         plot.subtitle = element_text(size = rel(0.8), hjust = 0.5)))
 ```
+
 KDE of Modern Tornadoes
 ```{r, eval = FALSE}
 torn_density_clip <- ModTornadoes |>
@@ -295,15 +296,21 @@ grid.arrange(histkde, modkde)
 ```
 `Fig_TornKDE`
 
+
+
 ## Data Analysis: Outbreaks
+
+
 ```{r}
 HistBigDays.sfdfT %>%
+  select(cDate, nT, GroupDayCas) %>%
   arrange(-nT) %>%
   head(10)
 ```
 
 ```{r}
 ModernBigDays.sfdfT %>%
+  select(cDate, nT, GroupDayCas) %>%
   arrange(-nT) %>%
   head(10)
 ```
@@ -317,16 +324,27 @@ March 28, 1984
 April 3, 1956
 
 ```{r}
-HistBigDays.sfdfT %>%
-  group_by(nT) %>%
+Hist_test <- HistBigDays.sfdfT %>% 
+  mutate(category = floor(nT/10)*10) 
+Mod_test <- ModernBigDays.sfdfT %>% 
+  mutate(category = floor(nT/10)*10) 
+
+Hist_test %>%
+  group_by(category) %>%
   summarize(numClus = n(), 
             totCas = sum(GroupDayCas))
 
-ModernBigDays.sfdfT %>%
-  group_by(nT) %>%
+Mod_test %>%
+  group_by(category) %>%
   summarize(numClus = n(), 
             totCas = sum(GroupDayCas))
 ```
+nT    & NumClus & totCas & NumClus & totCas
+6-9   &   124   &  9698  &   180   &  11142
+10-19 &    57   & 15035  &    89   &  10500
+20-29 &     5   &  3261  &    13   &   7270
+30-39 &     1   &  3698  &     1   &   3632
+40+   &     1   &  5694  &     1   &   5660
 
 From the Historical Data Set:  
 April 3, 1974
@@ -467,4 +485,39 @@ tmap_arrange(HistApr31974, ModApr31974)
 ```
 `Fig_April31974`
 
+```{r}
+HistClus_Mo <- HistBigDays.sfdfT %>%
+  group_by(Mo) %>%
+  summarize(numClus = n())
+
+ModClus_Mo <- ModernBigDays.sfdfT %>%
+  group_by(Mo) %>%
+  summarize(numClus = n())
+```
+
+`Make a figure of the total clusters by month`
+```{r}
+p0 <- ggplot(HistClus_Mo, aes(x = as.factor(Mo), y = numClus)) +
+  geom_bar(stat = "identity", fill = "gray70") +
+  scale_x_discrete(breaks = seq(1, 12, 1), labels = month.abb) +
+  scale_y_continuous(limits = c(0, 80)) +
+  coord_polar(start = 0) +
+  labs(x = "Month", y = "Number of Clusters") +
+  theme_minimal() +
+  ggtitle("A")
+
+p1 <- ggplot(ModClus_Mo, aes(x = as.factor(Mo), y = numClus)) +
+  geom_bar(stat = "identity", fill = "gray70") +
+  scale_x_discrete(breaks = seq(1, 12, 1), labels = month.abb) +
+  scale_y_continuous(limits = c(0, 80)) +
+  coord_polar(start = 0) +
+  labs(x = "Month", y = "Number of Clusters") +
+  theme_minimal() +
+  ggtitle("B")
+```
+
+```{r}
+grid.arrange(p0, p1, nrow = 1)
+```
+`Fig_ClusbyMo`
 
