@@ -296,7 +296,41 @@ grid.arrange(histkde, modkde)
 ```
 `Fig_TornKDE`
 
+```{r}
+HistTorn_Mo <- HistTornadoes %>%
+  group_by(mo) %>%
+  summarize(numTorn = n())
 
+ModTorn_Mo <- ModTornadoes %>%
+  group_by(mo) %>%
+  summarize(numTorn = n())
+```
+
+`Make a figure of the total clusters by month`
+```{r}
+p0 <- ggplot(HistTorn_Mo, aes(x = as.factor(mo), y = numTorn)) +
+  geom_bar(stat = "identity", fill = "gray70") +
+  scale_x_discrete(breaks = seq(1, 12, 1), labels = month.abb) +
+  scale_y_continuous(limits = c(0, 1800)) +
+  coord_polar(start = 0) +
+  labs(x = "Month", y = "Number of Tornadoes") +
+  theme_minimal() +
+  ggtitle("A")
+
+p1 <- ggplot(ModTorn_Mo, aes(x = as.factor(mo), y = numTorn)) +
+  geom_bar(stat = "identity", fill = "gray70") +
+  scale_x_discrete(breaks = seq(1, 12, 1), labels = month.abb) +
+  scale_y_continuous(limits = c(0, 1800)) +
+  coord_polar(start = 0) +
+  labs(x = "Month", y = "Number of Tornadoes") +
+  theme_minimal() +
+  ggtitle("B")
+```
+
+```{r}
+grid.arrange(p0, p1, nrow = 1)
+```
+`Fig_TornbyMo`
 
 ## Data Analysis: Outbreaks
 
