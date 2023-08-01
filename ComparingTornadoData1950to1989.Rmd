@@ -140,7 +140,6 @@ tmap_arrange(HistTornMap, ModernTornMap)
 ```
 `Fig_HistModTorns`
 
-
 ```{r}
  HistTornadoes %>%
   group_by(mag) %>%
@@ -151,7 +150,7 @@ tmap_arrange(HistTornMap, ModernTornMap)
   summarize(test = n())
 ```
 `Tab_TornMag`
-Magnitude & Historical Tornadoes & Modernn Tornadoes \\
+Magnitude & Historical Tornadoes & Modern Tornadoes \\
 F2 & 4287 & 6306 \\
 F3 & 993 & 1636 \\
 F4 & 375 & 385 \\
