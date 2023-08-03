@@ -560,36 +560,6 @@ grid.arrange(p0, p1, nrow = 1)
 Use modern as truth
 
 Set up data frame for paired t tests:
-```{r, eval = FALSE}
-SigTor.dat <- HistBigDays.sfdfT %>%
-  group_by(Year) %>%
-  summarize(Hist_bigdays = n(),
-            Hist_numTorn = sum(nT), 
-            Hist_avgnT = round(mean(nT)))
-
-Year <- 1951
-Hist_bigdays = 0
-Hist_numTorn = 0
-Hist_avgnT = 0
-test <- cbind(Year, Hist_bigdays, Hist_numTorn, Hist_avgnT)
-
-SigTor.dat <- st_drop_geometry(SigTor.dat)
-SigTor.dat <- rbind(SigTor.dat, test)
-
-ONETOR.dat <- ModernBigDays.sfdfT %>%
-  group_by(Year) %>%
-  summarize(Mod_bigdays = n(),
-            Mod_numTorn = sum(nT), 
-            Mod_avgnT = round(mean(nT)))
-
-ONETOR.dat <- st_drop_geometry(ONETOR.dat)
-
-SigTor.dat <- as.data.frame(SigTor.dat)
-ONETOR.dat <- as.data.frame(ONETOR.dat)
-
-dat <- merge(SigTor.dat, ONETOR.dat, by = "Year", all.x = FALSE)
-```
-
 ```{r}
 SigTor.dat <- HistBigDays.sfdfT %>%
   group_by(Year) %>%
@@ -623,20 +593,27 @@ ONETOR.dat$group <- rep("ONETOR",40)
 dat2 <- rbind(SigTor.dat, ONETOR.dat)
 ```
 
-
-Null Hypothesis: The means are the same between the groups. 
-
-Alternative Hypothesis: There means are different between the groups.
+`Null Hypothesis:` There is no relationship between the data. 
+`Alternative Hypothesis:` There is a relationship between the data!
 ```{r}
+bartlett.test(bigdays ~ group, data = dat2)
 #Test the number of big days each year between HIST and MOD
 t.test(bigdays ~ group, data = dat2, paired=TRUE, var.equal = FALSE)
 # pvalue: 0.006301
+#Reject the null: The means of the two datasets is NOT significantly different!
+```
 
+```{r}
 #Test the number of tornadoes each year between HIST and MOD
+bartlett.test(numTorn ~ group, data = dat2)
 t.test(numTorn ~ group, data = dat2, paired=TRUE, var.equal = FALSE)
 # pvalue: 0.006587
+#Reject the null: The means of the two datasets is NOT significantly different!
+```
 
+```{r}
 #Test the average number of tornadoes per outbreak each year between HIST and MOD
+bartlett.test(avgnT ~ group, data = dat2)
 t.test(avgnT ~ group, data = dat2, paired=TRUE, var.equal = FALSE)
 # pvalue: 1
 ```
