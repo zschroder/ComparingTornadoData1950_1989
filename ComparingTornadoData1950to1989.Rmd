@@ -558,7 +558,9 @@ grid.arrange(p0, p1, nrow = 1)
 ## Paired T-Test
 
 Use modern as truth
-```{r}
+
+Set up data frame for paired t tests:
+```{r, eval = FALSE}
 SigTor.dat <- HistBigDays.sfdfT %>%
   group_by(Year) %>%
   summarize(Hist_bigdays = n(),
@@ -587,4 +589,56 @@ ONETOR.dat <- as.data.frame(ONETOR.dat)
 
 dat <- merge(SigTor.dat, ONETOR.dat, by = "Year", all.x = FALSE)
 ```
+
+```{r}
+SigTor.dat <- HistBigDays.sfdfT %>%
+  group_by(Year) %>%
+  summarize(bigdays = n(),
+            numTorn = sum(nT), 
+            avgnT = round(mean(nT)))
+
+Year <- 1951
+bigdays = 0
+numTorn = 0
+avgnT = 0
+test <- cbind(Year, bigdays, numTorn, avgnT)
+
+SigTor.dat <- st_drop_geometry(SigTor.dat)
+SigTor.dat <- rbind(SigTor.dat, test)
+
+ONETOR.dat <- ModernBigDays.sfdfT %>%
+  group_by(Year) %>%
+  summarize(bigdays = n(),
+            numTorn = sum(nT), 
+            avgnT = round(mean(nT)))
+
+ONETOR.dat <- st_drop_geometry(ONETOR.dat)
+
+SigTor.dat <- as.data.frame(SigTor.dat)
+ONETOR.dat <- as.data.frame(ONETOR.dat)
+
+SigTor.dat$group <- rep("SigTor",40)
+ONETOR.dat$group <- rep("ONETOR",40)
+
+dat2 <- rbind(SigTor.dat, ONETOR.dat)
+```
+
+
+Null Hypothesis: The means are the same between the groups. 
+
+Alternative Hypothesis: There means are different between the groups.
+```{r}
+#Test the number of big days each year between HIST and MOD
+t.test(bigdays ~ group, data = dat2, paired=TRUE, var.equal = FALSE)
+# pvalue: 0.006301
+
+#Test the number of tornadoes each year between HIST and MOD
+t.test(numTorn ~ group, data = dat2, paired=TRUE, var.equal = FALSE)
+# pvalue: 0.006587
+
+#Test the average number of tornadoes per outbreak each year between HIST and MOD
+t.test(avgnT ~ group, data = dat2, paired=TRUE, var.equal = FALSE)
+# pvalue: 1
+```
+
 
