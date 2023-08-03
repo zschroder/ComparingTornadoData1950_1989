@@ -7,6 +7,8 @@ editor_options:
   chunk_output_type: console
 ---
 
+For publication in **Theoretical and Applied Climatology**
+
 Projections you may need: 
 ```{r}
 merc <- "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs"
@@ -39,10 +41,10 @@ suppressMessages(library(tmap))
 suppressMessages(library(USAboundaries))
 suppressMessages(library(USAboundariesData))
 
-library(ggspatial)
-library(sfhotspot)
-library(tidyverse)
-library(gridExtra)
+suppressMessages(library(ggspatial))
+suppressMessages(library(sfhotspot))
+suppressMessages(library(tidyverse))
+suppressMessages(library(gridExtra))
 ```
 
 ## Historical Tornado Outbreak Data
@@ -95,14 +97,14 @@ HistTornMap <- (tm_shape(stateBorders) +
   tm_layout(legend.bg.color = "white", 
             legend.text.size = .75, 
             attr.position = c("left", "bottom"), 
-            inner.margins = c(.05, .05, .05, .05)) +
+            inner.margins = c(.05, .05, .1, .05)) + # (S, W, N, E)
 tm_shape(HistTornadoes, is.master = TRUE, projection = "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs") +
   tm_bubbles(size = 0.1, 
              col = "mag_num", 
              breaks = seq(0, 5, by=1),
              labels = c("F1", "F2", "F3", "F4", "F5"), 
              title.col = "Magnitude") +
-      tm_layout("Historical Tornadoes (Total: 5,692)",legend.title.size = 1.1,
+      tm_layout("SigTor Dataset (Total: 5,692)", legend.title.size = 1.1,
             legend.position = c("right", "bottom"), 
             legend.stack = "horizontal",
             legend.frame = FALSE, 
@@ -121,14 +123,14 @@ ModernTornMap <- (tm_shape(stateBorders) +
   tm_layout(legend.bg.color = "white", 
             legend.text.size = .75, 
             attr.position = c("left", "bottom"), 
-            inner.margins = c(.05, .05, .05, .05)) +
+            inner.margins = c(.05, .05, .1, .05)) + # (S, W, N, E)
 tm_shape(ModTornadoes, is.master = TRUE, projection = "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs") +
   tm_bubbles(size = 0.1, 
              col = "mag", 
              breaks = seq(0, 5, by=1),
              labels = c("F1", "F2", "F3", "F4", "F5"), 
              title.col = "Magnitude") +
-      tm_layout("Modern Tornadoes (Total: 8,367)", legend.title.size = 1.1,
+      tm_layout("ONETOR Dataset (Total: 8,367)", legend.title.size = 1.1,
             legend.position = c("right", "bottom"), 
             legend.stack = "horizontal",
             legend.frame = FALSE, 
@@ -167,20 +169,19 @@ tester <- HistTornadoes %>%
   group_by(decade) %>%
   summarize(tottorn = n(),
             tornado = tottorn) %>%
-  mutate(label = "Historical Tornadoes")
+  mutate(label = "SigTor")
 
 tester2 <- ModTornadoes %>%
   group_by(decade) %>%
   summarize(tottorn = n()) %>%
-  mutate(label = "Modern Tornadoes",
+  mutate(label = "ONETOR",
          tornado = tottorn - tester$tornado)
 
 data <- rbind(tester,tester2)
-
 ```
 
 ```{r}
-ggplot(data, aes(x = decade, y = tornado, fill = forcats::fct_rev(label))) + 
+ggplot(data, aes(x = decade, y = tornado, fill = label)) + #forcats::fct_rev(label)
   geom_bar(stat = "identity", position = "stack") +
   theme_bw() +
   xlab("Decade") +
@@ -241,8 +242,8 @@ histkde <- (ggplot() +
                 size = 2.5, 
                 label.size = NA) +
   annotation_scale(style = "ticks", location = "bl") +
-  labs(title = "Historical Tornadoes in the United States",
-        subtitle = "1950 - 1989", 
+  labs(title = "Tornadoes in the United States",
+        subtitle = "SigTor Data: 1950 - 1989", 
        fill = "Kernel Density \nof Tornadoes") +
   scale_fill_distiller(palette = "PuBu", 
                        direction = 1,
@@ -278,8 +279,8 @@ modkde <- (ggplot() +
                 size = 2.5, 
                 label.size = NA) +
   annotation_scale(style = "ticks", location = "bl") +
-  labs(title = "Modern Tornadoes in the United States",
-        subtitle = "1950 - 1989", 
+  labs(title = "Tornadoes in the United States",
+        subtitle = "ONETOR Data: 1950 - 1989", 
        fill = "Kernel Density \nof Tornadoes") +
   scale_fill_distiller(palette = "PuBu", 
                        direction = 1,
@@ -432,14 +433,14 @@ tm_shape(Apr3tornadoes) +
             legend.text.size = 1, legend.width = -0.2) +
 tm_shape(Apr3centroid, projection = "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs") +
   tm_symbols(size = 1.25, col = "black", shape = 24)  +
-  tm_layout(main.title = "Historical Data", title = "April 3, 1974 \n 93 tornadoes", 
+  tm_layout(main.title = "SigTor Dataset", title = "April 3, 1974 \n 93 tornadoes", 
               title.position = c("center", "top"), 
               legend.title.size = 1.4,
               legend.position = c("right", "bottom"), 
               legend.stack = "horizontal",
               legend.frame = FALSE, 
               legend.text.size = 1.2, 
-              legend.width = -0.2, 
+              legend.width = -0.3, 
               title.size = 1.5)
 )
 
@@ -499,14 +500,14 @@ tm_shape(Apr3tornadoes) +
             legend.text.size = 1, legend.width = -0.2) +
 tm_shape(Apr3centroid, projection = "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs") +
   tm_symbols(size = 1.25, col = "black", shape = 24)  +
-  tm_layout(main.title = "Modern Data", title = "April 3, 1974 \n 96 tornadoes", 
+  tm_layout(main.title = "ONETOR Dataset", title = "April 3, 1974 \n 96 tornadoes", 
               title.position = c("center", "top"), 
               legend.title.size = 1.4,
               legend.position = c("right", "bottom"), 
               legend.stack = "horizontal",
               legend.frame = FALSE, 
               legend.text.size = 1.2, 
-              legend.width = -0.2, 
+              legend.width = -0.3, 
               title.size = 1.5)
 )
 
@@ -553,4 +554,37 @@ p1 <- ggplot(ModClus_Mo, aes(x = as.factor(Mo), y = numClus)) +
 grid.arrange(p0, p1, nrow = 1)
 ```
 `Fig_ClusbyMo`
+
+## Paired T-Test
+
+Use modern as truth
+```{r}
+SigTor.dat <- HistBigDays.sfdfT %>%
+  group_by(Year) %>%
+  summarize(Hist_bigdays = n(),
+            Hist_numTorn = sum(nT), 
+            Hist_avgnT = round(mean(nT)))
+
+Year <- 1951
+Hist_bigdays = 0
+Hist_numTorn = 0
+Hist_avgnT = 0
+test <- cbind(Year, Hist_bigdays, Hist_numTorn, Hist_avgnT)
+
+SigTor.dat <- st_drop_geometry(SigTor.dat)
+SigTor.dat <- rbind(SigTor.dat, test)
+
+ONETOR.dat <- ModernBigDays.sfdfT %>%
+  group_by(Year) %>%
+  summarize(Mod_bigdays = n(),
+            Mod_numTorn = sum(nT), 
+            Mod_avgnT = round(mean(nT)))
+
+ONETOR.dat <- st_drop_geometry(ONETOR.dat)
+
+SigTor.dat <- as.data.frame(SigTor.dat)
+ONETOR.dat <- as.data.frame(ONETOR.dat)
+
+dat <- merge(SigTor.dat, ONETOR.dat, by = "Year", all.x = FALSE)
+```
 
