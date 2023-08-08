@@ -62,6 +62,14 @@ load("HistoricalOutbreaks.RData")
 ```
 
 
+```{r}
+HistGroups.sfdfT %>%
+  group_by(ncD) %>%
+  summarize(totgroups = n(),
+            totnT = sum(nT))
+```
+
+
 ## Modern Tornado Outbreak Data
 
 Load the Modern Outbreak data into this session. 
@@ -74,6 +82,14 @@ Load the Modern Outbreak data into this session.
 
 ```{r}
 load("ModernOutbreaks.RData")
+```
+
+
+```{r}
+ModernGroups.sfdfT %>%
+  group_by(ncD) %>%
+  summarize(totgroups = n(),
+            totnT = sum(nT))
 ```
 
 ## Data Analysis: Tornadoes
@@ -104,7 +120,7 @@ tm_shape(HistTornadoes, is.master = TRUE, projection = "+proj=merc +lon_0=0 +k=1
              breaks = seq(0, 5, by=1),
              labels = c("F1", "F2", "F3", "F4", "F5"), 
              title.col = "Magnitude") +
-      tm_layout("SigTor Dataset (Total: 5,692)", legend.title.size = 1.1,
+      tm_layout("STORGIS Dataset (Total: 5,692)", legend.title.size = 1.1,
             legend.position = c("right", "bottom"), 
             legend.stack = "horizontal",
             legend.frame = FALSE, 
@@ -169,7 +185,7 @@ tester <- HistTornadoes %>%
   group_by(decade) %>%
   summarize(tottorn = n(),
             tornado = tottorn) %>%
-  mutate(label = "SigTor")
+  mutate(label = "STORGIS")
 
 tester2 <- ModTornadoes %>%
   group_by(decade) %>%
@@ -205,17 +221,33 @@ test <- merge(as.data.frame(histbyyear), as.data.frame(modbyyear), by = "yr")
 
 missingtorns <- test %>%
   mutate(missingtorn = modT-hisT)
+
+plotfill = as.data.frame(c(missingtorns$yr == 1971 | missingtorns$yr == 1973))
+colnames(plotfill)[1] <- "plotfill"
+
+missingtorns <- cbind(missingtorns, plotfill)
 ```
 
 ```{r}
-ggplot(missingtorns, aes(x = yr, y = missingtorn)) + 
-  geom_bar(stat = "identity", position = "stack") +
+ggplot(missingtorns, aes(x = yr, y = missingtorn, fill = plotfill)) + 
+  geom_bar(stat = "identity", position = "stack", show.legend = FALSE) +
+  scale_fill_manual(name = "plotfill", values=c("blue", "deepskyblue")) +
   theme_bw() +
   theme(legend.position="bottom", legend.title=element_blank(), axis.text = element_text(size = 14), axis.title = element_text(size = 16), legend.text = element_text(size = 16)) +
   scale_y_continuous(expand = c(0, 0), name="Number of Tornadoes", limits=c(-25, 180), breaks = seq(-25, 175, 25)) +
   scale_x_continuous(expand = c(0, 0), name="Year", limits=c(1949, 1991), breaks = seq(1950, 1991, 5))
 ```
 `Fig_MissingTorns`
+
+```{r}
+x <- ModTornadoes %>%
+  group_by(yr) %>%
+  summarize(numT = n()) 
+
+
+  sort(desc(x$numT))
+```
+
 
 KDE of Historical Tornadoes
 ```{r, eval = FALSE}
@@ -243,7 +275,7 @@ histkde <- (ggplot() +
                 label.size = NA) +
   annotation_scale(style = "ticks", location = "bl") +
   labs(title = "Tornadoes in the United States",
-        subtitle = "SigTor Data: 1950 - 1989", 
+        subtitle = "STORGIS Data: 1950 - 1989", 
        fill = "Kernel Density \nof Tornadoes") +
   scale_fill_distiller(palette = "PuBu", 
                        direction = 1,
@@ -433,7 +465,7 @@ tm_shape(Apr3tornadoes) +
             legend.text.size = 1, legend.width = -0.2) +
 tm_shape(Apr3centroid, projection = "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs") +
   tm_symbols(size = 1.25, col = "black", shape = 24)  +
-  tm_layout(main.title = "SigTor Dataset", title = "April 3, 1974 \n 93 tornadoes", 
+  tm_layout(main.title = "STORGIS Dataset", title = "April 3, 1974 \n 93 tornadoes", 
               title.position = c("center", "top"), 
               legend.title.size = 1.4,
               legend.position = c("right", "bottom"), 
@@ -561,7 +593,7 @@ Use modern as truth
 
 Set up data frame for paired t tests:
 ```{r}
-SigTor.dat <- HistBigDays.sfdfT %>%
+STORGIS.dat <- HistBigDays.sfdfT %>%
   group_by(Year) %>%
   summarize(bigdays = n(),
             numTorn = sum(nT), 
@@ -573,8 +605,8 @@ numTorn = 0
 avgnT = 0
 test <- cbind(Year, bigdays, numTorn, avgnT)
 
-SigTor.dat <- st_drop_geometry(SigTor.dat)
-SigTor.dat <- rbind(SigTor.dat, test)
+STORGIS.dat <- st_drop_geometry(STORGIS.dat)
+STORGIS.dat <- rbind(STORGIS.dat, test)
 
 ONETOR.dat <- ModernBigDays.sfdfT %>%
   group_by(Year) %>%
@@ -584,13 +616,13 @@ ONETOR.dat <- ModernBigDays.sfdfT %>%
 
 ONETOR.dat <- st_drop_geometry(ONETOR.dat)
 
-SigTor.dat <- as.data.frame(SigTor.dat)
+STORGIS.dat <- as.data.frame(STORGIS.dat)
 ONETOR.dat <- as.data.frame(ONETOR.dat)
 
-SigTor.dat$group <- rep("SigTor",40)
+STORGIS.dat$group <- rep("STORGIS",40)
 ONETOR.dat$group <- rep("ONETOR",40)
 
-dat2 <- rbind(SigTor.dat, ONETOR.dat)
+dat2 <- rbind(STORGIS.dat, ONETOR.dat)
 ```
 
 `Null Hypothesis:` There is no relationship between the data. 
