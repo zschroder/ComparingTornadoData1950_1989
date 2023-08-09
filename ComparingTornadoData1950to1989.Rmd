@@ -336,6 +336,9 @@ HistTorn_Mo <- HistTornadoes %>%
 ModTorn_Mo <- ModTornadoes %>%
   group_by(mo) %>%
   summarize(numTorn = n())
+
+HistTorn_Mo$numTorn - ModTorn_Mo$numTorn
+
 ```
 
 `Make a figure of the total clusters by month`
@@ -388,6 +391,26 @@ May 31, 1985
 April 30, 1954
 March 28, 1984
 April 3, 1956
+
+```{r}
+dates <- HistBigDays.sfdfT$cDate
+
+test <- ModernBigDays.sfdfT %>%
+  filter(!cDate %in% dates)
+
+dim(test)[1] / dim(ModernBigDays.sfdfT)[1]
+```
+
+```{r}
+dates <- ModernBigDays.sfdfT$cDate
+
+test <- HistBigDays.sfdfT %>%
+  filter(!cDate %in% dates)
+
+dim(test)[1] / dim(HistBigDays.sfdfT)[1]
+```
+
+
 
 ```{r}
 Hist_test <- HistBigDays.sfdfT %>% 
@@ -587,8 +610,49 @@ grid.arrange(p0, p1, nrow = 1)
 ```
 `Fig_ClusbyMo`
 
+```{r}
+HistClus_yr <- HistBigDays.sfdfT %>%
+  group_by(Year) %>%
+  summarize(numClus = n(),
+            plotfill = (numClus == 13))
+
+ModClus_yr <- ModernBigDays.sfdfT %>%
+  group_by(Year) %>%
+  summarize(numClus = n(),
+            plotfill = (numClus == 18))
+```
+
+```{r}
+HistClusyear <- ggplot(HistClus_yr, aes(x = Year, y = numClus, fill = plotfill)) +
+  geom_bar(stat = "identity", position = "stack", show.legend = FALSE) +
+  scale_fill_manual(name = "plotfill", values=c("blue", "deepskyblue")) +
+  theme_bw() +
+  theme(legend.position="bottom", legend.title=element_blank(), axis.text = element_text(size = 14), axis.title = element_text(size = 16), legend.text = element_text(size = 16)) +
+  scale_y_continuous(expand = c(0, 0), name="Number of Outbreaks", limits=c(0, 20), breaks = seq(0, 20, 2)) +
+  scale_x_continuous(expand = c(0, 0), name="Year", limits=c(1949, 1991), breaks = seq(1950, 1991, 5)) +
+  ggtitle("A")
+```
+
+```{r}
+ModClusyear <- ggplot(ModClus_yr, aes(x = Year, y = numClus, fill = plotfill)) +
+  geom_bar(stat = "identity", position = "stack", show.legend = FALSE) +
+  scale_fill_manual(name = "plotfill", values=c("red", "firebrick4")) +
+  theme_bw() +
+  theme(legend.position="bottom", legend.title=element_blank(), axis.text = element_text(size = 14), axis.title = element_text(size = 16), legend.text = element_text(size = 16)) +
+  scale_y_continuous(expand = c(0, 0), name="Number of Outbreaks", limits=c(0, 20), breaks = seq(0, 20, 2)) +
+  scale_x_continuous(expand = c(0, 0), name="Year", limits=c(1949, 1991), breaks = seq(1950, 1991, 5)) +
+  ggtitle("B")
+```
+
+```{r}
+grid.arrange(HistClusyear, ModClusyear, ncol = 1)
+```
+
 ## Paired T-Test
 
+**FOR INDIVIDUAL TORNADOES**
+
+**FOR OUTBREAKS**
 Use modern as truth
 
 Set up data frame for paired t tests:
