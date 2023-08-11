@@ -616,10 +616,31 @@ HistClus_yr <- HistBigDays.sfdfT %>%
   summarize(numClus = n(),
             plotfill = (numClus == 13))
 
+
+Year <- 1951
+numClus = 0
+plotfill = "FALSE"
+test <- cbind(as.numeric(Year), as.integer(numClus), as.logical(plotfill))
+HistClus_yr <- st_drop_geometry(HistClus_yr)
+colnames(test) <- c("Year", "numClus", "plotfill")
+x <- rbind(test, HistClus_yr)
+
 ModClus_yr <- ModernBigDays.sfdfT %>%
   group_by(Year) %>%
   summarize(numClus = n(),
             plotfill = (numClus == 18))
+
+x <- x %>%
+  arrange(Year)
+
+  datcheck  <- as.data.frame(x$numClus - ModClus_yr$numClus)
+  colnames(datcheck) <- "Diff"
+  #positive values means more outbreaks in the STORGIS data
+  
+  Ugh <- cbind(ModClus_yr, datcheck)
+  
+  Ugh %>%
+    filter(Diff >= 0)
 ```
 
 ```{r}
@@ -647,6 +668,59 @@ ModClusyear <- ggplot(ModClus_yr, aes(x = Year, y = numClus, fill = plotfill)) +
 ```{r}
 grid.arrange(HistClusyear, ModClusyear, ncol = 1)
 ```
+
+Plot the centroids: 
+
+```{r}
+A <- (tm_shape(stateBorders) +
+  tm_borders(col = "gray70", alpha = 1) +
+  tm_compass(size = 2, fontsize = 1, lwd = 2, color.dark = "gray70") +       
+  tm_scale_bar(width = .3, size = 0.6, lwd = 1.75, color.dark = "gray70")  +
+  tm_layout(legend.bg.color = "white", 
+            legend.text.size = .75, 
+            attr.position = c("left", "bottom"), 
+            inner.margins = c(.15, .1, .15, .25)) + # (S, W, N, E)
+tm_shape(HistBigDayCentroids.df, is.master = TRUE, projection = "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs") +
+  tm_bubbles(size = 0.3, 
+             col = "Mo", 
+             breaks = seq(1, 13, by=1),
+             labels = c(month.name), 
+             title.col = "Month") +
+      tm_layout("STORGIS Dataset", 
+                legend.title.size = 1.1,
+                legend.position = c("right", "bottom"), 
+                legend.stack = "horizontal",
+                legend.frame = FALSE, 
+                legend.text.size = 0.8, legend.width = -0.2))
+```
+
+```{r}
+B <- (tm_shape(stateBorders) +
+  tm_borders(col = "gray70", alpha = 1) +
+  tm_compass(size = 2, fontsize = 1, lwd = 2, color.dark = "gray70") +       
+  tm_scale_bar(width = .3, size = 0.6, lwd = 1.75, color.dark = "gray70") +
+  tm_layout(legend.bg.color = "white", 
+            legend.text.size = .75, 
+            attr.position = c("left", "bottom"), 
+            inner.margins = c(.1, .1, .15, .2)) + # (S, W, N, E)
+tm_shape(ModernBigDayCentroids.df, is.master = TRUE, projection = "+proj=merc +lon_0=0 +k=1 +x_0=0 +y_0=0 +ellps=WGS84 +datum=WGS84 +units=m +no_defs") +
+  tm_bubbles(size = 0.3, 
+             col = "Mo", 
+             breaks = seq(1, 13, by=1),
+             labels = c(month.name), 
+             title.col = "Month") +
+      tm_layout("ONETOR Dataset", 
+                legend.title.size = 1.1,
+                legend.position = c("right", "bottom"), 
+                legend.stack = "horizontal",
+                legend.frame = FALSE, 
+                legend.text.size = 0.8, legend.width = -0.2))
+```
+
+```{r}
+tmap_arrange(A, B, ncol = 1)
+```
+Fig_CentroidLocations
 
 ## Paired T-Test
 
