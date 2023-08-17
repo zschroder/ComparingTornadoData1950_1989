@@ -726,6 +726,61 @@ Fig_CentroidLocations
 
 **FOR INDIVIDUAL TORNADOES**
 
+```{r}
+STORGIS.dat <- HistTornadoes %>%
+  group_by(decade) %>%
+  summarize(numTorn = n())
+
+STORGIS.dat <- st_drop_geometry(STORGIS.dat)
+
+ONETOR.dat <- ModTornadoes %>%
+  group_by(decade) %>%
+  summarize(numTorn = n())
+
+ONETOR.dat <- st_drop_geometry(ONETOR.dat)
+
+STORGIS.dat$group <- rep("STORGIS",4)
+ONETOR.dat$group <- rep("ONETOR",4)
+
+dat1 <- rbind(STORGIS.dat, ONETOR.dat)
+```
+
+Is there a significant difference between individual tornadoes by decade? 
+```{r}
+bartlett.test(numTorn ~ group, data = dat1)
+#Test the number of tornadoes by year between HIST and MOD
+t.test(numTorn ~ group, data = dat1, paired=TRUE, var.equal = FALSE)
+# pvalue: 0.0245
+#Reject the null: The means of the two datasets is NOT significantly different!
+```
+
+Is there a significant difference between individual tornadoes by year? 
+```{r}
+STORGIS.dat <- HistTornadoes %>%
+  group_by(Year) %>%
+  summarize(numTorn = n())
+
+STORGIS.dat <- st_drop_geometry(STORGIS.dat)
+
+ONETOR.dat <- ModTornadoes %>%
+  group_by(Year) %>%
+  summarize(numTorn = n())
+
+ONETOR.dat <- st_drop_geometry(ONETOR.dat)
+
+STORGIS.dat$group <- rep("STORGIS",40)
+ONETOR.dat$group <- rep("ONETOR",40)
+
+dat1 <- rbind(STORGIS.dat, ONETOR.dat)
+```
+
+```{r}
+bartlett.test(numTorn ~ group, data = dat1)
+#Test the number of tornadoes by year between HIST and MOD
+t.test(numTorn ~ group, data = dat1, paired=TRUE, var.equal = FALSE)
+# pvalue: 0.0245
+#Reject the null: The means of the two datasets is NOT significantly different!
+```
 **FOR OUTBREAKS**
 Use modern as truth
 
